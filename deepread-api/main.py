@@ -11,7 +11,7 @@ app = FastAPI(title="DeepRead API")
 # CORS setup for frontend
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173"],  # Vite default port
+    allow_origins=["http://localhost:5173", "http://localhost:5174"],  # Vite default ports
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -45,6 +45,10 @@ async def upload_pdf(file: UploadFile = File(...)):
         
     return {"id": file_id, "filename": file.filename, "status": "uploaded"}
 
+from fastapi.staticfiles import StaticFiles
+
+app.mount("/static", StaticFiles(directory="uploads"), name="static")
+
 @app.get("/audit/{file_id}")
 def audit_pdf(file_id: str):
     file_path = os.path.join(UPLOAD_DIR, f"{file_id}.pdf")
@@ -52,8 +56,13 @@ def audit_pdf(file_id: str):
         raise HTTPException(status_code=404, detail="File not found")
     
     try:
+        # Define image output dir
+        images_dir = os.path.join(UPLOAD_DIR, "images")
+        os.makedirs(images_dir, exist_ok=True)
+        
         # Parse the PDF
-        structure = parse_pdf(file_path)
+        structure = parse_pdf(file_path, images_dir, "http://localhost:8000/static/images")
+        
         return {
             "id": file_id,
             "metadata": {

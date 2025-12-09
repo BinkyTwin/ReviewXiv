@@ -31,13 +31,25 @@ export default function Reader({ fileId, onBack }) {
 
         setExplaining(true);
         const section = data.structure.sections[activeSectionIndex];
-        if (!section?.content) {
+
+        // Extract text from blocks for AI
+        let textToExplain = "";
+        if (Array.isArray(section.content)) {
+            textToExplain = section.content
+                .filter(b => b.type === 'text' || typeof b === 'string')
+                .map(b => b.value || b)
+                .join("\n");
+        } else {
+            textToExplain = section.content;
+        }
+
+        if (!textToExplain) {
             setExplaining(false);
             return;
         }
 
         try {
-            const result = await getExplanation(section.content);
+            const result = await getExplanation(textToExplain);
             // Clean up markdown code blocks if any (LLM might wrap in ```markdown)
             // For now just raw text
             setExplanations(prev => ({ ...prev, [activeSectionIndex]: result.explanation }));
@@ -87,8 +99,8 @@ export default function Reader({ fileId, onBack }) {
                                 key={idx}
                                 onClick={() => setActiveSectionIndex(idx)}
                                 className={`w-full text-left px-4 py-3 rounded-lg text-sm transition-all flex items-center justify-between group ${idx === activeSectionIndex
-                                        ? 'bg-indigo-500/10 text-indigo-300 ring-1 ring-indigo-500/30'
-                                        : 'text-neutral-400 hover:bg-neutral-800/50 hover:text-neutral-200'
+                                    ? 'bg-indigo-500/10 text-indigo-300 ring-1 ring-indigo-500/30'
+                                    : 'text-neutral-400 hover:bg-neutral-800/50 hover:text-neutral-200'
                                     }`}
                             >
                                 <div className="flex items-center gap-3 truncate">
@@ -140,14 +152,36 @@ export default function Reader({ fileId, onBack }) {
                     </div>
                 </div>
 
-                <div className="flex-1 flex overflow-hidden">
+                <div className="flex-1 flex overflow-hidden relative">
                     {/* Original Text */}
-                    <div className={`flex-1 overflow-y-auto px-8 py-12 transition-all ${hasExplanation ? 'w-1/2 border-r border-neutral-800' : 'w-full max-w-3xl mx-auto'}`}>
+                    <div className={`flex-1 overflow-y-auto px-8 py-12 transition-all scrollbar-thin scrollbar-thumb-neutral-800 scrollbar-track-transparent ${hasExplanation ? 'w-1/2 border-r border-neutral-800' : 'w-full max-w-3xl mx-auto'}`}>
                         <h1 className="text-3xl font-bold text-neutral-100 mb-8 font-serif leading-tight">
                             {currentSection.title}
                         </h1>
-                        <div className="prose prose-invert prose-lg max-w-none text-neutral-300 leading-relaxed whitespace-pre-wrap font-serif">
-                            {currentSection.content}
+
+                        <div className="prose prose-invert prose-lg max-w-none text-neutral-300 leading-relaxed font-serif pb-20">
+                            {Array.isArray(currentSection.content) && currentSection.content.map((block, idx) => {
+                                if (typeof block === 'string') {
+                                    // Backward compatibility or fallback
+                                    return <p key={idx} className="whitespace-pre-wrap mb-4">{block}</p>;
+                                }
+                                if (block.type === 'text') {
+                                    return <p key={idx} className="whitespace-pre-wrap mb-4">{block.value}</p>;
+                                }
+                                if (block.type === 'image') {
+                                    return (
+                                        <div key={idx} className="my-8 mx-auto -mx-4 md:-mx-8 lg:-mx-12">
+                                            <figure className="bg-neutral-900/50 border border-neutral-800 rounded-xl overflow-hidden shadow-2xl">
+                                                <img src={block.src} alt="Extracted from PDF" className="w-full h-auto object-contain max-h-[500px]" />
+                                                <figcaption className="p-3 text-center text-sm text-neutral-500 bg-neutral-900 border-t border-neutral-800">
+                                                    Figure extracted from PDF
+                                                </figcaption>
+                                            </figure>
+                                        </div>
+                                    );
+                                }
+                                return null;
+                            })}
                         </div>
                     </div>
 
@@ -158,9 +192,9 @@ export default function Reader({ fileId, onBack }) {
                                 initial={{ width: 0, opacity: 0 }}
                                 animate={{ width: "50%", opacity: 1 }}
                                 exit={{ width: 0, opacity: 0 }}
-                                className="bg-[#0A0A0A] overflow-y-auto border-l border-neutral-800"
+                                className="bg-[#0A0A0A] border-l border-neutral-800 h-full flex flex-col"
                             >
-                                <div className="p-8">
+                                <div className="flex-1 overflow-y-auto p-8 scrollbar-thin scrollbar-thumb-neutral-800 scrollbar-track-transparent">
                                     <div className="flex items-center gap-3 mb-6 pb-4 border-b border-indigo-500/20">
                                         <div className="p-2 bg-indigo-500/10 rounded-lg text-indigo-400">
                                             <Bot className="w-6 h-6" />
@@ -179,6 +213,7 @@ export default function Reader({ fileId, onBack }) {
                                             L'IA peut faire des erreurs. Vérifiez toujours le texte original à gauche.
                                         </p>
                                     </div>
+                                    <div className="h-20" /> {/* Spacer for scrolling */}
                                 </div>
                             </motion.div>
                         )}
