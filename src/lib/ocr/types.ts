@@ -46,36 +46,7 @@ export interface PageLayout {
 }
 
 /**
- * olmOCR request to LMStudio
- */
-export interface OlmOCRRequest {
-  /** Base64 encoded image */
-  image: string;
-  /** Page metadata for better OCR context */
-  metadata?: {
-    pageNumber: number;
-    totalPages: number;
-    width: number;
-    height: number;
-  };
-}
-
-/**
- * olmOCR response from LMStudio
- */
-export interface OlmOCRResponse {
-  /** Structured markdown output */
-  markdown: string;
-  /** Token usage info */
-  usage?: {
-    promptTokens: number;
-    completionTokens: number;
-    totalTokens: number;
-  };
-}
-
-/**
- * OCR processing status for a document
+ * Processing status for a document
  */
 export interface OCRStatus {
   paperId: string;

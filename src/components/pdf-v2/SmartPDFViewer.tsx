@@ -2,22 +2,28 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { cn } from "@/lib/utils";
-import { PageLayout, TextSelection, OCRStatus } from "@/lib/ocr/types";
+import { PageLayout, TextSelection } from "@/lib/ocr/types";
 import SmartTextLayer from "./SmartTextLayer";
 import SelectionToolbar from "./SelectionToolbar";
-import { renderPageToImage } from "@/lib/ocr/page-to-image";
 import { Progress } from "@/components/ui/progress";
-import { Loader2, AlertCircle, Eye, EyeOff } from "lucide-react";
+import { Loader2, AlertCircle, Eye, EyeOff, CheckCircle2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
-// PDF.js types - see src/types/pdfjs.d.ts for global declarations
+// PDF.js types
 import type { PDFDocumentProxy } from "@/types/pdfjs.d";
 
-interface OCRServiceStatus {
+interface DoclingServiceStatus {
   available: boolean;
   provider: string;
-  model: string;
+  url: string;
 }
+
+type ProcessingStatus =
+  | "idle"
+  | "checking"
+  | "processing"
+  | "completed"
+  | "error";
 
 interface SmartPDFViewerProps {
   /** URL of the PDF file */
@@ -41,12 +47,11 @@ interface SmartPDFViewerProps {
 /**
  * SmartPDFViewer
  *
- * A next-generation PDF viewer with:
- * - OCR-based text extraction (olmOCR via DeepInfra)
+ * PDF viewer with Docling-based text extraction:
+ * - Precise text positions via BoundingBox
+ * - Native table/formula detection
  * - HTML-native text rendering
- * - Inline translation
- * - Precise highlighting
- * - Canvas background for figures (semi-transparent)
+ * - Semi-transparent canvas background
  */
 export function SmartPDFViewer({
   pdfUrl,
@@ -70,16 +75,11 @@ export function SmartPDFViewer({
   const [showCanvasBackground, setShowCanvasBackground] =
     useState(initialShowCanvas);
 
-  // OCR processing state
-  const [ocrStatus, setOcrStatus] = useState<OCRStatus>({
-    paperId: pdfUrl,
-    totalPages: 0,
-    processedPages: 0,
-    currentPage: 0,
-    status: "idle",
-  });
-  const [ocrServiceStatus, setOcrServiceStatus] =
-    useState<OCRServiceStatus | null>(null);
+  // Processing state
+  const [status, setStatus] = useState<ProcessingStatus>("idle");
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [doclingStatus, setDoclingStatus] =
+    useState<DoclingServiceStatus | null>(null);
 
   // Refs
   const containerRef = useRef<HTMLDivElement>(null);
@@ -87,144 +87,138 @@ export function SmartPDFViewer({
   const pageRefs = useRef<Map<number, HTMLDivElement>>(new Map());
   const pdfjsLoadedRef = useRef(false);
 
-  // Check OCR service availability on mount
+  // Check Docling service availability
   useEffect(() => {
-    const checkOCRService = async () => {
+    const checkDocling = async () => {
+      setStatus("checking");
       try {
-        const response = await fetch("/api/ocr");
+        const response = await fetch("/api/docling");
         if (response.ok) {
-          const status: OCRServiceStatus = await response.json();
-          setOcrServiceStatus(status);
+          const data: DoclingServiceStatus = await response.json();
+          setDoclingStatus(data);
+          if (!data.available) {
+            setErrorMessage("Docling service not running");
+          }
         } else {
-          setOcrServiceStatus({ available: false, provider: "", model: "" });
+          setDoclingStatus({ available: false, provider: "docling", url: "" });
+          setErrorMessage("Failed to check Docling service");
         }
       } catch {
-        setOcrServiceStatus({ available: false, provider: "", model: "" });
+        setDoclingStatus({ available: false, provider: "docling", url: "" });
+        setErrorMessage("Cannot connect to API");
       }
+      setStatus("idle");
     };
-    checkOCRService();
+    checkDocling();
   }, []);
 
   // Load PDF.js from CDN
   useEffect(() => {
-    if (pdfjsLoadedRef.current) return;
+    if (pdfjsLoadedRef.current || typeof window === "undefined") return;
+
+    if (window.pdfjsLib) {
+      pdfjsLoadedRef.current = true;
+      return;
+    }
 
     const script = document.createElement("script");
     script.src =
       "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.8.69/pdf.min.mjs";
     script.type = "module";
     script.onload = () => {
-      pdfjsLoadedRef.current = true;
-      loadPdf();
+      if (window.pdfjsLib) {
+        window.pdfjsLib.GlobalWorkerOptions.workerSrc =
+          "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.8.69/pdf.worker.min.mjs";
+        pdfjsLoadedRef.current = true;
+      }
     };
     document.head.appendChild(script);
 
     return () => {
       script.remove();
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Load PDF when URL changes
-  const loadPdf = useCallback(async () => {
-    if (!pdfUrl || !pdfjsLoadedRef.current) return;
-
-    try {
-      const pdfjsLib = window.pdfjsLib;
-      if (!pdfjsLib) return;
-
-      pdfjsLib.GlobalWorkerOptions.workerSrc =
-        "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.8.69/pdf.worker.min.mjs";
-
-      const loadingTask = pdfjsLib.getDocument(pdfUrl);
-      const pdfDoc = await loadingTask.promise;
-
-      setPdf(pdfDoc);
-      setNumPages(pdfDoc.numPages);
-
-      setOcrStatus((prev) => ({
-        ...prev,
-        totalPages: pdfDoc.numPages,
-        status: "idle",
-      }));
-    } catch (error) {
-      console.error("Failed to load PDF:", error);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pdfUrl]);
-
-  // Start OCR when both PDF and OCR service are ready
   useEffect(() => {
-    if (pdf && ocrServiceStatus?.available && ocrStatus.status === "idle") {
-      processAllPages(pdf);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pdf, ocrServiceStatus?.available]);
+    if (!pdfUrl) return;
 
-  // Process all pages with OCR via API
-  const processAllPages = useCallback(
-    async (pdfDoc: PDFDocumentProxy) => {
-      if (!ocrServiceStatus?.available) return;
-
-      setOcrStatus((prev) => ({
-        ...prev,
-        status: "processing",
-        currentPage: 1,
-      }));
-
-      const layouts = new Map<number, PageLayout>();
-
-      for (let pageNum = 1; pageNum <= pdfDoc.numPages; pageNum++) {
-        try {
-          setOcrStatus((prev) => ({
-            ...prev,
-            currentPage: pageNum,
-          }));
-
-          // Render page to image
-          const imageResult = await renderPageToImage(pdfDoc, pageNum);
-
-          // Call OCR API
-          const response = await fetch("/api/ocr", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              image: imageResult.imageBase64,
-              pageNumber: pageNum,
-              totalPages: pdfDoc.numPages,
-              width: imageResult.width,
-              height: imageResult.height,
-            }),
-          });
-
-          if (!response.ok) {
-            const error = await response.json();
-            throw new Error(error.error || "OCR failed");
-          }
-
-          const result = await response.json();
-          const layout: PageLayout = result.layout;
-
-          layouts.set(pageNum, layout);
-
-          setPageLayouts(new Map(layouts));
-          setOcrStatus((prev) => ({
-            ...prev,
-            processedPages: pageNum,
-          }));
-        } catch (error) {
-          console.error(`OCR failed for page ${pageNum}:`, error);
-          // Continue with next page
-        }
+    const loadPdf = async () => {
+      // Wait for PDF.js to load
+      let attempts = 0;
+      while (!window.pdfjsLib && attempts < 50) {
+        await new Promise((r) => setTimeout(r, 100));
+        attempts++;
       }
 
-      setOcrStatus((prev) => ({
-        ...prev,
-        status: "completed",
-      }));
-    },
-    [ocrServiceStatus?.available],
-  );
+      if (!window.pdfjsLib) {
+        setErrorMessage("PDF.js failed to load");
+        return;
+      }
+
+      try {
+        const loadingTask = window.pdfjsLib.getDocument(pdfUrl);
+        const pdfDoc = await loadingTask.promise;
+        setPdf(pdfDoc);
+        setNumPages(pdfDoc.numPages);
+      } catch (error) {
+        console.error("Failed to load PDF:", error);
+        setErrorMessage("Failed to load PDF");
+      }
+    };
+
+    loadPdf();
+  }, [pdfUrl]);
+
+  // Process PDF with Docling when both PDF and service are ready
+  useEffect(() => {
+    if (
+      !pdf ||
+      !doclingStatus?.available ||
+      status === "processing" ||
+      status === "completed"
+    ) {
+      return;
+    }
+
+    const processWithDocling = async () => {
+      setStatus("processing");
+      setErrorMessage(null);
+
+      try {
+        // Call Docling API with PDF URL
+        const response = await fetch("/api/docling", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ pdfUrl }),
+        });
+
+        if (!response.ok) {
+          const error = await response.json();
+          throw new Error(error.error || "Docling processing failed");
+        }
+
+        const result = await response.json();
+
+        // Convert layouts object to Map
+        const layoutsMap = new Map<number, PageLayout>();
+        for (const [pageNum, layout] of Object.entries(result.layouts)) {
+          layoutsMap.set(parseInt(pageNum, 10), layout as PageLayout);
+        }
+
+        setPageLayouts(layoutsMap);
+        setStatus("completed");
+      } catch (error) {
+        console.error("Docling processing failed:", error);
+        setErrorMessage(
+          error instanceof Error ? error.message : "Processing failed",
+        );
+        setStatus("error");
+      }
+    };
+
+    processWithDocling();
+  }, [pdf, doclingStatus?.available, pdfUrl, status]);
 
   // Render canvas background for a page
   const renderCanvasBackground = useCallback(
@@ -234,39 +228,43 @@ export function SmartPDFViewer({
       const canvas = canvasRefs.current.get(pageNum);
       if (!canvas) return;
 
-      const page = await pdf.getPage(pageNum);
-      const viewport = page.getViewport({ scale });
+      try {
+        const page = await pdf.getPage(pageNum);
+        const viewport = page.getViewport({ scale });
 
-      const context = canvas.getContext("2d");
-      if (!context) return;
+        const context = canvas.getContext("2d");
+        if (!context) return;
 
-      const pixelRatio = window.devicePixelRatio || 1;
-      canvas.width = Math.floor(viewport.width * pixelRatio);
-      canvas.height = Math.floor(viewport.height * pixelRatio);
-      canvas.style.width = `${viewport.width}px`;
-      canvas.style.height = `${viewport.height}px`;
+        const pixelRatio = window.devicePixelRatio || 1;
+        canvas.width = Math.floor(viewport.width * pixelRatio);
+        canvas.height = Math.floor(viewport.height * pixelRatio);
+        canvas.style.width = `${viewport.width}px`;
+        canvas.style.height = `${viewport.height}px`;
 
-      context.scale(pixelRatio, pixelRatio);
+        context.scale(pixelRatio, pixelRatio);
 
-      await page.render({
-        canvasContext: context,
-        viewport,
-      }).promise;
+        await page.render({
+          canvasContext: context,
+          viewport,
+        }).promise;
+      } catch (error) {
+        console.error(`Failed to render page ${pageNum}:`, error);
+      }
     },
     [pdf, scale],
   );
 
-  // Render all visible pages
+  // Render all pages
   useEffect(() => {
     if (!pdf || !showCanvasBackground) return;
 
-    const renderVisiblePages = async () => {
+    const renderPages = async () => {
       for (let pageNum = 1; pageNum <= numPages; pageNum++) {
         await renderCanvasBackground(pageNum);
       }
     };
 
-    renderVisiblePages();
+    renderPages();
   }, [pdf, numPages, scale, showCanvasBackground, renderCanvasBackground]);
 
   // Handle selection
@@ -278,18 +276,17 @@ export function SmartPDFViewer({
     [onSelectionChange],
   );
 
-  // Handle zoom
+  // Zoom controls
   const handleZoomIn = () => setScale((s) => Math.min(s + 0.2, 3));
   const handleZoomOut = () => setScale((s) => Math.max(s - 0.2, 0.5));
 
-  // Get base dimensions for a page
+  // Get page dimensions
   const getPageDimensions = (pageNum: number) => {
     const layout = pageLayouts.get(pageNum);
     if (layout) {
       return { width: layout.width, height: layout.height };
     }
-    // Default PDF page size
-    return { width: 612, height: 792 };
+    return { width: 612, height: 792 }; // Default PDF size
   };
 
   return (
@@ -316,8 +313,8 @@ export function SmartPDFViewer({
             onClick={() => setShowCanvasBackground((v) => !v)}
             title={
               showCanvasBackground
-                ? "Hide PDF background"
-                : "Show PDF background"
+                ? "Masquer le fond PDF"
+                : "Afficher le fond PDF"
             }
           >
             {showCanvasBackground ? (
@@ -327,31 +324,38 @@ export function SmartPDFViewer({
             )}
           </Button>
 
-          {/* OCR status */}
-          {ocrStatus.status === "processing" && (
+          {/* Status indicator */}
+          {status === "checking" && (
+            <div className="flex items-center gap-2 text-muted-foreground">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              <span className="text-sm">Verification...</span>
+            </div>
+          )}
+
+          {status === "processing" && (
             <div className="flex items-center gap-2">
               <Loader2 className="h-4 w-4 animate-spin text-primary" />
               <span className="text-sm text-muted-foreground">
-                OCR: {ocrStatus.currentPage}/{ocrStatus.totalPages}
+                Traitement Docling...
               </span>
-              <Progress
-                value={(ocrStatus.processedPages / ocrStatus.totalPages) * 100}
-                className="w-24"
-              />
+              <Progress value={50} className="w-24" />
             </div>
           )}
 
-          {ocrServiceStatus?.available === false && (
+          {status === "completed" && (
+            <div className="flex items-center gap-2 text-green-600">
+              <CheckCircle2 className="h-4 w-4" />
+              <span className="text-sm">{numPages} pages</span>
+            </div>
+          )}
+
+          {(status === "error" || doclingStatus?.available === false) && (
             <div className="flex items-center gap-2 text-destructive">
               <AlertCircle className="h-4 w-4" />
-              <span className="text-sm">OCR service not available</span>
+              <span className="text-sm">
+                {errorMessage || "Docling indisponible"}
+              </span>
             </div>
-          )}
-
-          {ocrServiceStatus?.available && ocrStatus.status === "idle" && (
-            <span className="text-xs text-muted-foreground">
-              {ocrServiceStatus.provider}: {ocrServiceStatus.model}
-            </span>
           )}
         </div>
       </div>
@@ -376,7 +380,7 @@ export function SmartPDFViewer({
                 }}
                 data-page-number={pageNum}
               >
-                {/* Canvas background (semi-transparent) */}
+                {/* Canvas background */}
                 {showCanvasBackground && (
                   <canvas
                     ref={(el) => {
@@ -399,17 +403,15 @@ export function SmartPDFViewer({
                     onSelectionChange={handleSelectionChange}
                   />
                 ) : (
-                  /* Loading placeholder */
                   <div className="absolute inset-0 flex items-center justify-center">
-                    {ocrStatus.status === "processing" &&
-                      ocrStatus.currentPage === pageNum && (
-                        <div className="flex flex-col items-center gap-2">
-                          <Loader2 className="h-8 w-8 animate-spin text-primary" />
-                          <span className="text-sm text-muted-foreground">
-                            Processing page {pageNum}...
-                          </span>
-                        </div>
-                      )}
+                    {status === "processing" && (
+                      <div className="flex flex-col items-center gap-2">
+                        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                        <span className="text-sm text-muted-foreground">
+                          Analyse en cours...
+                        </span>
+                      </div>
+                    )}
                   </div>
                 )}
 
