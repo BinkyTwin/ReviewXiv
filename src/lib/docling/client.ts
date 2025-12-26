@@ -52,23 +52,27 @@ export async function convertPDF(
 ): Promise<DoclingDocument> {
   const formData = new FormData();
 
-  // Create blob from buffer
+  // Create blob from buffer - use 'files' field name as per docling-serve API
   const blob = new Blob([new Uint8Array(pdfBuffer)], {
     type: "application/pdf",
   });
-  formData.append("file", blob, filename);
+  formData.append("files", blob, filename);
 
-  // Add options as query params
-  const params = new URLSearchParams();
-  if (options.format) params.set("format", options.format);
-  if (options.ocr !== undefined) params.set("ocr", String(options.ocr));
-  if (options.tables !== undefined)
-    params.set("tables", String(options.tables));
+  // Add options as form fields (not query params)
+  formData.append("to_formats", "json");
+  formData.append("from_formats", "pdf");
 
-  const url = `${DOCLING_URL}/v1/convert${params.toString() ? `?${params}` : ""}`;
+  if (options.ocr !== undefined) {
+    formData.append("do_ocr", String(options.ocr));
+  }
+
+  const url = `${DOCLING_URL}/v1/convert/file`;
 
   const response = await fetch(url, {
     method: "POST",
+    headers: {
+      Accept: "application/json",
+    },
     body: formData,
   });
 
@@ -80,7 +84,9 @@ export async function convertPDF(
   }
 
   const result = await response.json();
-  return result.document || result;
+  // docling-serve returns { document: [...] } with array of documents
+  const docs = result.document || result.documents || result;
+  return Array.isArray(docs) ? docs[0] : docs;
 }
 
 /**
@@ -113,10 +119,15 @@ export async function convertPDFToMarkdown(
   const blob = new Blob([new Uint8Array(pdfBuffer)], {
     type: "application/pdf",
   });
-  formData.append("file", blob, filename);
+  formData.append("files", blob, filename);
+  formData.append("to_formats", "md");
+  formData.append("from_formats", "pdf");
 
-  const response = await fetch(`${DOCLING_URL}/v1/convert?format=markdown`, {
+  const response = await fetch(`${DOCLING_URL}/v1/convert/file`, {
     method: "POST",
+    headers: {
+      Accept: "application/json",
+    },
     body: formData,
   });
 
@@ -128,7 +139,10 @@ export async function convertPDFToMarkdown(
   }
 
   const result = await response.json();
-  return result.markdown || result.document?.export_to_markdown?.() || "";
+  // Extract markdown from response
+  const docs = result.document || result.documents || [];
+  const doc = Array.isArray(docs) ? docs[0] : docs;
+  return doc?.md_content || doc?.markdown || "";
 }
 
 /** Create a configured Docling client */
