@@ -5,7 +5,9 @@ import { useSearchParams } from "next/navigation";
 import dynamic from "next/dynamic";
 import { ChatPanel } from "@/components/chat/ChatPanel";
 import { SelectionPopover } from "@/components/pdf/SelectionPopover";
+import { SelectionContextBar } from "@/components/reader/selection";
 import { PersistentHighlightLayer } from "@/components/pdf/PersistentHighlightLayer";
+import type { InlineTranslation } from "@/components/reader/layers";
 import { TranslationModal } from "@/components/pdf/TranslationModal";
 import { NotesPanel } from "@/components/notes/NotesPanel";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -15,7 +17,7 @@ import { offsetsToRects } from "@/lib/highlight-renderer";
 import type { PaperWithPages } from "@/types/paper";
 import type { Citation } from "@/types/citation";
 import type { TextItem } from "@/types/pdf";
-import type { Highlight, HighlightColor } from "@/types/highlight";
+import type { Highlight, HighlightColor, HighlightRect } from "@/types/highlight";
 import type { SelectionData } from "@/components/pdf/PDFViewer";
 
 // Dynamic import of PDFViewer to avoid SSR issues
@@ -54,6 +56,9 @@ const SmartPDFViewer = dynamic(
   },
 );
 
+// Import SmartSelectionData type from SmartPDFViewer
+import type { SmartSelectionData } from "@/components/pdf-v2/SmartPDFViewer";
+
 interface PaperReaderProps {
   paper: PaperWithPages;
   pdfUrl: string;
@@ -67,7 +72,8 @@ export function PaperReader({ paper, pdfUrl }: PaperReaderProps) {
   const [activeCitation, setActiveCitation] = useState<Citation | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [highlights, setHighlights] = useState<Highlight[]>([]);
-  const [selection, setSelection] = useState<SelectionData | null>(null);
+  type SelectionState = SelectionData & { rects?: HighlightRect[] };
+  const [selection, setSelection] = useState<SelectionState | null>(null);
   const [highlightContext, setHighlightContext] = useState<{
     page: number;
     text: string;
@@ -76,6 +82,9 @@ export function PaperReader({ paper, pdfUrl }: PaperReaderProps) {
     isOpen: boolean;
     text: string;
   }>({ isOpen: false, text: "" });
+  const [inlineTranslations, setInlineTranslations] = useState<
+    InlineTranslation[]
+  >([]);
   const pageRefsRef = useRef<Map<number, HTMLDivElement>>(new Map());
   const [pageRefsSnapshot, setPageRefsSnapshot] = useState<
     Map<number, HTMLDivElement>
@@ -127,18 +136,32 @@ export function PaperReader({ paper, pdfUrl }: PaperReaderProps) {
     async (color: HighlightColor) => {
       if (!selection) return;
 
-      // Get text items for the page to compute rects
-      const pageTextItems = textItemsMap.get(selection.page);
-      if (!pageTextItems) return;
+      let rects: HighlightRect[] = [];
 
-      // Compute rects from offsets
-      const citation: Citation = {
-        page: selection.page,
-        start: selection.startOffset,
-        end: selection.endOffset,
-        quote: selection.selectedText.slice(0, 100),
-      };
-      const rects = offsetsToRects(citation, pageTextItems);
+      if (useSmartViewer) {
+        if (!selection.rects || selection.rects.length === 0) {
+          console.warn("Missing selection rects for smart viewer highlight.");
+          return;
+        }
+        rects = selection.rects;
+      } else {
+        // Get text items for the page to compute rects
+        const pageTextItems = textItemsMap.get(selection.page);
+        if (!pageTextItems) return;
+
+        // Compute rects from offsets
+        const citation: Citation = {
+          page: selection.page,
+          start: selection.startOffset,
+          end: selection.endOffset,
+          quote: selection.selectedText.slice(0, 100),
+        };
+        rects = offsetsToRects(citation, pageTextItems);
+      }
+
+      if (rects.length === 0) {
+        return;
+      }
 
       try {
         const response = await fetch("/api/highlights", {
@@ -167,7 +190,7 @@ export function PaperReader({ paper, pdfUrl }: PaperReaderProps) {
       window.getSelection()?.removeAllRanges();
       setSelection(null);
     },
-    [selection, paper.id, textItemsMap],
+    [selection, paper.id, textItemsMap, useSmartViewer],
   );
 
   // Handle "Ask" button - pass context to chat
@@ -199,13 +222,62 @@ export function PaperReader({ paper, pdfUrl }: PaperReaderProps) {
   }, [selection]);
 
   // === Smart Viewer (v2) Handlers ===
-  // Note: SmartPDFViewer with Mistral OCR has its own markdown-based rendering
-  // Selection/highlight functionality will be added in a future iteration
+  // Handle text selection from SmartPDFViewer
+  const handleSmartTextSelect = useCallback(
+    (selectionData: SmartSelectionData | null) => {
+      if (!selectionData) {
+        setSelection(null);
+        return;
+      }
+      // Convert SmartSelectionData to SelectionData format
+      setSelection({
+        page: selectionData.pageNumber,
+        startOffset: selectionData.startOffset,
+        endOffset: selectionData.endOffset,
+        selectedText: selectionData.selectedText,
+        position: selectionData.position,
+        rects: selectionData.rects,
+      });
+    },
+    []
+  );
 
   // Close popover
   const handleClosePopover = useCallback(() => {
     window.getSelection()?.removeAllRanges();
     setSelection(null);
+  }, []);
+
+  // Handle applying translation inline on the document
+  const handleApplyInlineTranslation = useCallback(
+    (result: { sourceText: string; targetLanguage: string; translatedText: string }) => {
+      if (!selection) return;
+
+      // Create a new inline translation
+      const newTranslation: InlineTranslation = {
+        id: `translation-${Date.now()}`,
+        pageNumber: selection.page,
+        sourceText: result.sourceText,
+        targetLanguage: result.targetLanguage,
+        translatedText: result.translatedText,
+        startOffset: selection.startOffset,
+        endOffset: selection.endOffset,
+        rects: [], // TODO: Compute rects from selection
+        isActive: true, // Show translation by default
+      };
+
+      setInlineTranslations((prev) => [...prev, newTranslation]);
+    },
+    [selection]
+  );
+
+  // Handle translation toggle (show/hide inline translation)
+  const handleTranslationToggle = useCallback((translationId: string) => {
+    setInlineTranslations((prev) =>
+      prev.map((t) =>
+        t.id === translationId ? { ...t, isActive: !t.isActive } : t
+      )
+    );
   }, []);
 
   // Handle highlight click
@@ -252,7 +324,30 @@ export function PaperReader({ paper, pdfUrl }: PaperReaderProps) {
       <div className="w-[70%] h-full border-r border-border relative">
         {useSmartViewer ? (
           /* Smart PDF Viewer v2 - Mistral OCR */
-          <SmartPDFViewer pdfUrl={pdfUrl} />
+          <>
+            <SmartPDFViewer
+              pdfUrl={pdfUrl}
+              highlights={highlights}
+              activeCitation={activeCitation}
+              inlineTranslations={inlineTranslations}
+              onHighlightClick={handleHighlightClick}
+              onTextSelect={handleSmartTextSelect}
+              onPageChange={setCurrentPage}
+              onTranslationToggle={handleTranslationToggle}
+            />
+
+            {/* Selection context bar for v2 - improved with keyboard shortcuts */}
+            {selection && (
+              <SelectionContextBar
+                position={selection.position}
+                selectedText={selection.selectedText}
+                onHighlight={handleCreateHighlight}
+                onAsk={handleAsk}
+                onTranslate={handleTranslate}
+                onClose={handleClosePopover}
+              />
+            )}
+          </>
         ) : (
           /* Classic PDF Viewer */
           <>
@@ -289,6 +384,7 @@ export function PaperReader({ paper, pdfUrl }: PaperReaderProps) {
           isOpen={translationModal.isOpen}
           onClose={() => setTranslationModal({ isOpen: false, text: "" })}
           originalText={translationModal.text}
+          onApplyInline={useSmartViewer ? handleApplyInlineTranslation : undefined}
         />
       </div>
 

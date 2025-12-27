@@ -244,12 +244,12 @@ export function TextBlock({
  */
 function getHighlightClass(color: string): string {
   const colorMap: Record<string, string> = {
-    yellow: "bg-highlight-yellow/35",
-    green: "bg-highlight-green/35",
-    blue: "bg-highlight-blue/35",
-    red: "bg-highlight-red/35",
-    purple: "bg-highlight-purple/35",
-    orange: "bg-highlight-orange/35",
+    yellow: "highlight-yellow",
+    green: "highlight-green",
+    blue: "highlight-blue",
+    red: "highlight-red",
+    purple: "highlight-purple",
+    orange: "highlight-orange",
   };
   return colorMap[color] || colorMap.yellow;
 }

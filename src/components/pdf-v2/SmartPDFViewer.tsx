@@ -1,6 +1,16 @@
 "use client";
 
-import { useEffect, useRef, useState, useMemo, Children, isValidElement, type ReactNode } from "react";
+import {
+  Children,
+  isValidElement,
+  memo,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 import { cn } from "@/lib/utils";
 import { Progress } from "@/components/ui/progress";
 import {
@@ -19,11 +29,30 @@ import rehypeSlug from "rehype-slug";
 import rehypeAutolinkHeadings from "rehype-autolink-headings";
 // Note: rehype-sanitize removed - it was stripping data URIs for images
 import type { MistralPage } from "@/lib/mistral-ocr/types";
+import type { Highlight, HighlightRect } from "@/types/highlight";
+import type { Citation } from "@/types/citation";
+import {
+  HighlightLayer,
+  CitationLayer,
+  TranslationLayer,
+  type HighlightData,
+  type CitationHighlight,
+  type InlineTranslation,
+} from "@/components/reader/layers";
 
 interface MistralServiceStatus {
   available: boolean;
   provider: string;
   model: string;
+}
+
+export interface SmartSelectionData {
+  pageNumber: number;
+  startOffset: number;
+  endOffset: number;
+  selectedText: string;
+  position: { x: number; y: number };
+  rects: HighlightRect[];
 }
 
 type ProcessingStatus =
@@ -37,6 +66,20 @@ interface SmartPDFViewerProps {
   pdfUrl: string;
   initialScale?: number;
   className?: string;
+  /** Persistent highlights to display */
+  highlights?: Highlight[];
+  /** Active citation to flash (from AI chat) */
+  activeCitation?: Citation | null;
+  /** Inline translations to display */
+  inlineTranslations?: InlineTranslation[];
+  /** Callback when a highlight is clicked */
+  onHighlightClick?: (highlight: Highlight) => void;
+  /** Callback when text is selected */
+  onTextSelect?: (selection: SmartSelectionData | null) => void;
+  /** Callback when page changes */
+  onPageChange?: (page: number) => void;
+  /** Callback when translation toggle is clicked */
+  onTranslationToggle?: (translationId: string) => void;
 }
 
 const getElementChildren = (node: ReactNode): ReactNode | undefined =>
@@ -45,10 +88,17 @@ const getElementChildren = (node: ReactNode): ReactNode | undefined =>
 /**
  * SmartPDFViewer - Mistral OCR-based PDF viewer
  */
-export function SmartPDFViewer({
+export const SmartPDFViewer = memo(function SmartPDFViewer({
   pdfUrl,
   initialScale = 1,
   className,
+  highlights = [],
+  activeCitation,
+  inlineTranslations = [],
+  onHighlightClick,
+  onTextSelect,
+  onPageChange,
+  onTranslationToggle,
 }: SmartPDFViewerProps) {
   const [scale, setScale] = useState(initialScale);
   const [pages, setPages] = useState<MistralPage[]>([]);
@@ -225,19 +275,59 @@ export function SmartPDFViewer({
             </div>
           )}
 
-          {pages.map((page) => (
-            <PageCanvas
-              key={page.index}
-              page={page}
-              scale={scale}
-              pageNumber={page.index + 1}
-            />
-          ))}
+          {pages.map((page) => {
+            const pageNum = page.index + 1;
+
+            // Filter highlights for this page
+            const pageHighlights: HighlightData[] = highlights
+              .filter((h) => h.pageNumber === pageNum)
+              .map((h) => ({
+                id: h.id,
+                rects: h.rects,
+                color: h.color,
+                text: h.selectedText,
+                hasAnnotation: !!h.note,
+              }));
+
+            // Prepare citation for this page if active
+            const pageCitation: CitationHighlight | null =
+              activeCitation && activeCitation.page === pageNum
+                ? {
+                    id: `citation-${pageNum}`,
+                    rects: [], // Rects will be computed by parent component
+                  }
+                : null;
+
+            // Filter translations for this page
+            const pageTranslations = inlineTranslations.filter(
+              (t) => t.pageNumber === pageNum
+            );
+
+            return (
+              <PageCanvas
+                key={page.index}
+                page={page}
+                scale={scale}
+                pageNumber={pageNum}
+                pageHighlights={pageHighlights}
+                pageCitation={pageCitation}
+                pageTranslations={pageTranslations}
+                onHighlightClick={(highlightId) => {
+                  const highlight = highlights.find((h) => h.id === highlightId);
+                  if (highlight) {
+                    onHighlightClick?.(highlight);
+                  }
+                }}
+                onTextSelect={onTextSelect}
+                onTranslationToggle={onTranslationToggle}
+              />
+            );
+          })}
         </div>
       </div>
     </div>
   );
-}
+});
 
 /**
  * Page Canvas Component - Renders a page like real A4 paper
@@ -246,14 +336,113 @@ interface PageCanvasProps {
   page: MistralPage;
   scale: number;
   pageNumber: number;
+  /** Highlights for this page */
+  pageHighlights: HighlightData[];
+  /** Active citation for this page */
+  pageCitation: CitationHighlight | null;
+  /** Inline translations for this page */
+  pageTranslations: InlineTranslation[];
+  /** Callback when a highlight is clicked */
+  onHighlightClick?: (highlightId: string) => void;
+  /** Callback when text is selected */
+  onTextSelect?: (selection: SmartSelectionData | null) => void;
+  /** Callback when translation toggle is clicked */
+  onTranslationToggle?: (translationId: string) => void;
 }
 
 // A4 dimensions in pixels at 96 DPI (standard screen)
 const A4_WIDTH_PX = 794; // 210mm at 96 DPI
 const A4_HEIGHT_PX = 1123; // 297mm at 96 DPI
 
-function PageCanvas({ page, scale, pageNumber }: PageCanvasProps) {
-  
+function PageCanvas({
+  page,
+  scale,
+  pageNumber,
+  pageHighlights,
+  pageCitation,
+  pageTranslations,
+  onHighlightClick,
+  onTextSelect,
+  onTranslationToggle,
+}: PageCanvasProps) {
+  const pageRef = useRef<HTMLDivElement>(null);
+  const contentRef = useRef<HTMLElement>(null);
+  const [hoveredHighlightId, setHoveredHighlightId] = useState<string | null>(
+    null
+  );
+
+  // Handle text selection
+  const handleMouseUp = useCallback(() => {
+    const selection = window.getSelection();
+    if (!selection || selection.isCollapsed || !onTextSelect) {
+      return;
+    }
+
+    const selectedText = selection.toString().trim();
+    if (!selectedText) {
+      onTextSelect(null);
+      return;
+    }
+
+    // Get selection position for popover
+    const range = selection.getRangeAt(0);
+    const rect = range.getBoundingClientRect();
+
+    // Calculate character offset within the page content
+    // For now, we use a simplified approach - full offset calculation
+    // would require tracking text positions from Mistral OCR
+    const pageElement = pageRef.current;
+    const contentElement = contentRef.current;
+    if (
+      !pageElement ||
+      !contentElement ||
+      !contentElement.contains(range.commonAncestorContainer)
+    ) {
+      return;
+    }
+
+    // Walk through text nodes to calculate offset
+    const walker = document.createTreeWalker(
+      contentElement,
+      NodeFilter.SHOW_TEXT,
+      null
+    );
+
+    let charCount = 0;
+    let startOffset = 0;
+    let endOffset = 0;
+    let node: Node | null;
+
+    while ((node = walker.nextNode())) {
+      const nodeLength = node.textContent?.length || 0;
+
+      if (node === range.startContainer) {
+        startOffset = charCount + range.startOffset;
+      }
+
+      if (node === range.endContainer) {
+        endOffset = charCount + range.endOffset;
+        break;
+      }
+
+      charCount += nodeLength;
+    }
+
+    const selectionRects = getSelectionRects(range, pageElement);
+
+    onTextSelect({
+      pageNumber,
+      startOffset,
+      endOffset,
+      selectedText,
+      position: {
+        x: rect.left + rect.width / 2,
+        y: rect.top - 10,
+      },
+      rects: selectionRects,
+    });
+  }, [pageNumber, onTextSelect]);
+
   // Utility function to clean and improve text punctuation
   const cleanText = (text: string): string => {
     if (typeof text !== 'string') return text;
@@ -397,16 +586,38 @@ function PageCanvas({ page, scale, pageNumber }: PageCanvasProps) {
 
   return (
     <div
+      ref={pageRef}
       className="relative bg-white shadow-[0_4px_20px_rgba(0,0,0,0.3)] transition-shadow hover:shadow-[0_8px_30px_rgba(0,0,0,0.4)]"
       style={{
         width: scaledWidth,
         minHeight: scaledHeight,
         maxWidth: "95vw",
       }}
+      data-page-number={pageNumber}
+      onMouseUp={handleMouseUp}
     >
+      {/* Highlight Layer - z-index 20 */}
+      <HighlightLayer
+        highlights={pageHighlights}
+        onHighlightClick={onHighlightClick}
+        onHighlightHover={setHoveredHighlightId}
+        hoveredHighlightId={hoveredHighlightId}
+      />
+
+      {/* Translation Layer - z-index 40 */}
+      <TranslationLayer
+        translations={pageTranslations}
+        scale={scale}
+        onToggle={onTranslationToggle}
+      />
+
+      {/* Citation Layer - z-index 50 */}
+      <CitationLayer citation={pageCitation} />
+
       {/* Page content */}
       <article
-        className="relative"
+        ref={contentRef}
+        className="relative select-text"
         style={{
           padding: `${48 * scale}px ${56 * scale}px`,
           fontSize: `${14 * scale}px`,
@@ -967,6 +1178,83 @@ function PageCanvas({ page, scale, pageNumber }: PageCanvasProps) {
       </div>
     </div>
   );
+}
+
+function getSelectionRects(
+  range: Range,
+  pageElement: HTMLDivElement,
+): HighlightRect[] {
+  const pageRect = pageElement.getBoundingClientRect();
+  if (pageRect.width === 0 || pageRect.height === 0) {
+    return [];
+  }
+
+  const rects = Array.from(range.getClientRects())
+    .map((rect) => normalizeRect(rect, pageRect))
+    .filter((rect): rect is HighlightRect => rect !== null);
+
+  if (rects.length === 0) {
+    const fallbackRect = normalizeRect(range.getBoundingClientRect(), pageRect);
+    if (fallbackRect) {
+      rects.push(fallbackRect);
+    }
+  }
+
+  return mergeSelectionRects(rects);
+}
+
+function normalizeRect(
+  rect: DOMRect,
+  pageRect: DOMRect,
+): HighlightRect | null {
+  const left = Math.max(rect.left, pageRect.left);
+  const right = Math.min(rect.right, pageRect.right);
+  const top = Math.max(rect.top, pageRect.top);
+  const bottom = Math.min(rect.bottom, pageRect.bottom);
+
+  if (right <= left || bottom <= top) {
+    return null;
+  }
+
+  const width = right - left;
+  const height = bottom - top;
+
+  return {
+    x: (left - pageRect.left) / pageRect.width,
+    y: (top - pageRect.top) / pageRect.height,
+    width: width / pageRect.width,
+    height: height / pageRect.height,
+  };
+}
+
+function mergeSelectionRects(rects: HighlightRect[]): HighlightRect[] {
+  if (rects.length === 0) return [];
+
+  const sorted = [...rects].sort((a, b) => a.y - b.y || a.x - b.x);
+  const merged: HighlightRect[] = [];
+  let current = { ...sorted[0] };
+
+  for (let i = 1; i < sorted.length; i++) {
+    const next = sorted[i];
+    const sameLine = Math.abs(next.y - current.y) < 0.01;
+    const adjacent = next.x <= current.x + current.width + 0.01;
+
+    if (sameLine && adjacent) {
+      current = {
+        x: current.x,
+        y: current.y,
+        width:
+          Math.max(current.x + current.width, next.x + next.width) - current.x,
+        height: Math.max(current.height, next.height),
+      };
+    } else {
+      merged.push(current);
+      current = { ...next };
+    }
+  }
+
+  merged.push(current);
+  return merged;
 }
 
 export default SmartPDFViewer;

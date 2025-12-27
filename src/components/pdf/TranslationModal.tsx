@@ -16,12 +16,20 @@ import {
 } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Loader2, Copy, Check } from "lucide-react";
+import { Loader2, Copy, Check, FileText } from "lucide-react";
+
+export interface TranslationResult {
+  sourceText: string;
+  targetLanguage: string;
+  translatedText: string;
+}
 
 interface TranslationModalProps {
   isOpen: boolean;
   onClose: () => void;
   originalText: string;
+  /** Callback to apply translation inline on the document */
+  onApplyInline?: (result: TranslationResult) => void;
 }
 
 const LANGUAGES = [
@@ -40,6 +48,7 @@ export function TranslationModal({
   isOpen,
   onClose,
   originalText,
+  onApplyInline,
 }: TranslationModalProps) {
   const [targetLanguage, setTargetLanguage] = useState("fr");
   const [translation, setTranslation] = useState<string | null>(null);
@@ -80,6 +89,17 @@ export function TranslationModal({
       await navigator.clipboard.writeText(translation);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
+    }
+  };
+
+  const handleApplyInline = () => {
+    if (translation && onApplyInline) {
+      onApplyInline({
+        sourceText: originalText,
+        targetLanguage,
+        translatedText: translation,
+      });
+      handleClose();
     }
   };
 
@@ -141,24 +161,26 @@ export function TranslationModal({
                 Traduction
               </label>
               {translation && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={handleCopy}
-                  className="h-8"
-                >
-                  {copied ? (
-                    <>
-                      <Check className="h-4 w-4 mr-1" />
-                      Copie
-                    </>
-                  ) : (
-                    <>
-                      <Copy className="h-4 w-4 mr-1" />
-                      Copier
-                    </>
-                  )}
-                </Button>
+                <div className="flex items-center gap-1">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={handleCopy}
+                    className="h-8"
+                  >
+                    {copied ? (
+                      <>
+                        <Check className="h-4 w-4 mr-1" />
+                        Copie
+                      </>
+                    ) : (
+                      <>
+                        <Copy className="h-4 w-4 mr-1" />
+                        Copier
+                      </>
+                    )}
+                  </Button>
+                </div>
               )}
             </div>
             <ScrollArea className="h-[100px] rounded-md border border-border p-3 bg-card">
@@ -177,6 +199,19 @@ export function TranslationModal({
               )}
             </ScrollArea>
           </div>
+
+          {/* Apply Inline button */}
+          {translation && onApplyInline && (
+            <div className="flex justify-end pt-2 border-t border-border">
+              <Button
+                onClick={handleApplyInline}
+                className="gap-2"
+              >
+                <FileText className="h-4 w-4" />
+                Appliquer sur le document
+              </Button>
+            </div>
+          )}
         </div>
       </DialogContent>
     </Dialog>
