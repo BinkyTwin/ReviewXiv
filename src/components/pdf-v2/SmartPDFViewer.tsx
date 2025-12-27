@@ -176,7 +176,8 @@ export function SmartPDFViewer({
       !pdf ||
       !doclingStatus?.available ||
       status === "processing" ||
-      status === "completed"
+      status === "completed" ||
+      status === "error"
     ) {
       return;
     }

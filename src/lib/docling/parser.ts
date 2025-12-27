@@ -165,6 +165,10 @@ export function parseDoclingDocument(
 ): Map<number, PageLayout> {
   const layouts = new Map<number, PageLayout>();
 
+  if (!doc?.pages) {
+    throw new Error("Invalid Docling document: missing pages.");
+  }
+
   // Get page dimensions
   const pageInfos = new Map<number, { width: number; height: number }>();
   for (const [pageKey, page] of Object.entries(doc.pages)) {

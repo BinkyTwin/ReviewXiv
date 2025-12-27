@@ -7,6 +7,71 @@
 import type { DoclingDocument, DoclingConvertOptions } from "./types";
 
 const DOCLING_URL = process.env.DOCLING_URL || "http://localhost:5001";
+const DOCLING_OCR_DEFAULT = (() => {
+  const envValue = process.env.DOCLING_OCR;
+  if (!envValue) return undefined;
+  if (envValue.toLowerCase() === "true") return true;
+  if (envValue.toLowerCase() === "false") return false;
+  return undefined;
+})();
+
+function buildConvertFormData(
+  pdfBuffer: ArrayBuffer,
+  filename: string,
+  options: DoclingConvertOptions,
+  toFormat: "json" | "md",
+): FormData {
+  const formData = new FormData();
+
+  // Create blob from buffer - use 'files' field name as per docling-serve API
+  const blob = new Blob([new Uint8Array(pdfBuffer)], {
+    type: "application/pdf",
+  });
+  formData.append("files", blob, filename);
+
+  // Add options as form fields (not query params)
+  formData.append("to_formats", toFormat);
+  formData.append("from_formats", "pdf");
+
+  const ocrValue = options.ocr ?? DOCLING_OCR_DEFAULT;
+  if (ocrValue !== undefined) {
+    formData.append("do_ocr", String(ocrValue));
+  }
+
+  return formData;
+}
+
+function extractDoclingDocument(result: unknown): DoclingDocument {
+  if (!result || typeof result !== "object") {
+    throw new Error("Docling response is empty or invalid.");
+  }
+
+  const root = result as Record<string, unknown>;
+  let candidate =
+    (root.document as unknown) ??
+    (root.documents as unknown) ??
+    (root.json_content as unknown) ??
+    root;
+
+  if (Array.isArray(candidate)) {
+    candidate = candidate[0];
+  }
+
+  if (candidate && typeof candidate === "object") {
+    const candidateRecord = candidate as Record<string, unknown>;
+    if (candidateRecord.json_content && typeof candidateRecord.json_content === "object") {
+      return candidateRecord.json_content as DoclingDocument;
+    }
+
+    if (candidateRecord.pages && typeof candidateRecord.pages === "object") {
+      return candidateRecord as DoclingDocument;
+    }
+  }
+
+  throw new Error(
+    "Docling response missing json_content. Ensure to_formats includes json.",
+  );
+}
 
 /** Check if docling-serve is available */
 export async function checkDoclingAvailable(): Promise<boolean> {
@@ -50,22 +115,6 @@ export async function convertPDF(
   filename: string = "document.pdf",
   options: DoclingConvertOptions = {},
 ): Promise<DoclingDocument> {
-  const formData = new FormData();
-
-  // Create blob from buffer - use 'files' field name as per docling-serve API
-  const blob = new Blob([new Uint8Array(pdfBuffer)], {
-    type: "application/pdf",
-  });
-  formData.append("files", blob, filename);
-
-  // Add options as form fields (not query params)
-  formData.append("to_formats", "json");
-  formData.append("from_formats", "pdf");
-
-  if (options.ocr !== undefined) {
-    formData.append("do_ocr", String(options.ocr));
-  }
-
   const url = `${DOCLING_URL}/v1/convert/file`;
 
   const response = await fetch(url, {
@@ -73,7 +122,7 @@ export async function convertPDF(
     headers: {
       Accept: "application/json",
     },
-    body: formData,
+    body: buildConvertFormData(pdfBuffer, filename, options, "json"),
   });
 
   if (!response.ok) {
@@ -84,9 +133,7 @@ export async function convertPDF(
   }
 
   const result = await response.json();
-  // docling-serve returns { document: [...] } with array of documents
-  const docs = result.document || result.documents || result;
-  return Array.isArray(docs) ? docs[0] : docs;
+  return extractDoclingDocument(result);
 }
 
 /**
@@ -115,20 +162,12 @@ export async function convertPDFToMarkdown(
   pdfBuffer: ArrayBuffer,
   filename: string = "document.pdf",
 ): Promise<string> {
-  const formData = new FormData();
-  const blob = new Blob([new Uint8Array(pdfBuffer)], {
-    type: "application/pdf",
-  });
-  formData.append("files", blob, filename);
-  formData.append("to_formats", "md");
-  formData.append("from_formats", "pdf");
-
   const response = await fetch(`${DOCLING_URL}/v1/convert/file`, {
     method: "POST",
     headers: {
       Accept: "application/json",
     },
-    body: formData,
+    body: buildConvertFormData(pdfBuffer, filename, {}, "md"),
   });
 
   if (!response.ok) {
