@@ -35,10 +35,14 @@ import {
   HighlightLayer,
   CitationLayer,
   TranslationLayer,
+  CanvasLayer,
+  PDFTextLayer,
   type HighlightData,
   type CitationHighlight,
   type InlineTranslation,
 } from "@/components/reader/layers";
+import { usePDFDocument } from "@/components/reader/hooks";
+import type { PageData } from "@/types/pdf";
 
 interface MistralServiceStatus {
   available: boolean;
@@ -62,10 +66,20 @@ type ProcessingStatus =
   | "completed"
   | "error";
 
+/**
+ * Rendering mode for the PDF viewer
+ * - "markdown": Use Mistral OCR markdown rendering (current default)
+ * - "canvas": Use PDF.js canvas rendering with text layer
+ * - "hybrid": Auto-select based on page content (canvas for text pages, markdown for scanned)
+ */
+export type RenderMode = "markdown" | "canvas" | "hybrid";
+
 interface SmartPDFViewerProps {
   pdfUrl: string;
   initialScale?: number;
   className?: string;
+  /** Rendering mode (default: "markdown") */
+  renderMode?: RenderMode;
   /** Persistent highlights to display */
   highlights?: Highlight[];
   /** Active citation to flash (from AI chat) */
@@ -83,15 +97,23 @@ interface SmartPDFViewerProps {
 }
 
 const getElementChildren = (node: ReactNode): ReactNode | undefined =>
-  isValidElement<{ children?: ReactNode }>(node) ? node.props.children : undefined;
+  isValidElement<{ children?: ReactNode }>(node)
+    ? node.props.children
+    : undefined;
 
 /**
- * SmartPDFViewer - Mistral OCR-based PDF viewer
+ * SmartPDFViewer - Hybrid PDF viewer with OCR fallback
+ *
+ * Supports three rendering modes:
+ * - "markdown": Uses Mistral OCR for all pages (current default)
+ * - "canvas": Uses PDF.js canvas + text layer for all pages
+ * - "hybrid": Auto-selects based on page content
  */
 export const SmartPDFViewer = memo(function SmartPDFViewer({
   pdfUrl,
   initialScale = 1,
   className,
+  renderMode = "markdown",
   highlights = [],
   activeCitation,
   inlineTranslations = [],
@@ -110,6 +132,19 @@ export const SmartPDFViewer = memo(function SmartPDFViewer({
 
   const containerRef = useRef<HTMLDivElement>(null);
   const processedRef = useRef(false);
+
+  // Load PDF.js document for canvas/hybrid modes
+  const {
+    pages: pdfPages,
+    pageDataMap,
+    numPages: pdfNumPages,
+    isLoading: pdfLoading,
+    error: pdfError,
+    pdfjsLoaded,
+  } = usePDFDocument({
+    pdfUrl,
+    fetchTextItems: renderMode !== "markdown",
+  });
 
   // Check Mistral service availability
   useEffect(() => {
@@ -265,64 +300,173 @@ export const SmartPDFViewer = memo(function SmartPDFViewer({
         style={{ backgroundColor: "#525659" }}
       >
         <div className="flex flex-col items-center gap-8 py-8 px-4">
-          {status === "processing" && pages.length === 0 && (
+          {/* Loading state for markdown mode */}
+          {renderMode === "markdown" &&
+            status === "processing" &&
+            pages.length === 0 && (
+              <div className="flex flex-col items-center gap-4 py-16">
+                <Loader2 className="h-16 w-16 animate-spin text-primary" />
+                <span className="text-white/80 text-lg">
+                  Analyse du document...
+                </span>
+                <Progress value={progress} className="w-64" />
+              </div>
+            )}
+
+          {/* Loading state for canvas/hybrid mode */}
+          {renderMode !== "markdown" && pdfLoading && (
             <div className="flex flex-col items-center gap-4 py-16">
               <Loader2 className="h-16 w-16 animate-spin text-primary" />
               <span className="text-white/80 text-lg">
-                Analyse du document...
+                Chargement du document...
               </span>
-              <Progress value={progress} className="w-64" />
             </div>
           )}
 
-          {pages.map((page) => {
-            const pageNum = page.index + 1;
+          {/* Canvas/Hybrid mode rendering */}
+          {renderMode !== "markdown" && !pdfLoading && pdfPages.size > 0 && (
+            <>
+              {Array.from({ length: pdfNumPages }, (_, i) => i + 1).map(
+                (pageNum) => {
+                  const pdfPage = pdfPages.get(pageNum);
+                  const pageData = pageDataMap.get(pageNum);
 
-            // Filter highlights for this page
-            const pageHighlights: HighlightData[] = highlights
-              .filter((h) => h.pageNumber === pageNum)
-              .map((h) => ({
-                id: h.id,
-                rects: h.rects,
-                color: h.color,
-                text: h.selectedText,
-                hasAnnotation: !!h.note,
-              }));
+                  // In hybrid mode, fall back to markdown if page has no text
+                  const shouldUseMarkdown =
+                    renderMode === "hybrid" && pageData && !pageData.hasText;
 
-            // Prepare citation for this page if active
-            const pageCitation: CitationHighlight | null =
-              activeCitation && activeCitation.page === pageNum
-                ? {
-                    id: `citation-${pageNum}`,
-                    rects: [], // Rects will be computed by parent component
+                  // Get corresponding Mistral page for hybrid fallback
+                  const mistralPage = shouldUseMarkdown
+                    ? pages.find((p) => p.index === pageNum - 1)
+                    : null;
+
+                  // Filter highlights for this page
+                  const pageHighlights: HighlightData[] = highlights
+                    .filter((h) => h.pageNumber === pageNum)
+                    .map((h) => ({
+                      id: h.id,
+                      rects: h.rects,
+                      color: h.color,
+                      text: h.selectedText,
+                      hasAnnotation: !!h.note,
+                    }));
+
+                  // Prepare citation for this page if active
+                  const pageCitation: CitationHighlight | null =
+                    activeCitation && activeCitation.page === pageNum
+                      ? { id: `citation-${pageNum}`, rects: [] }
+                      : null;
+
+                  // Filter translations for this page
+                  const pageTranslations = inlineTranslations.filter(
+                    (t) => t.pageNumber === pageNum,
+                  );
+
+                  // Use markdown rendering for scanned pages in hybrid mode
+                  if (shouldUseMarkdown && mistralPage) {
+                    return (
+                      <PageCanvas
+                        key={`markdown-${pageNum}`}
+                        page={mistralPage}
+                        scale={scale}
+                        pageNumber={pageNum}
+                        pageHighlights={pageHighlights}
+                        pageCitation={pageCitation}
+                        pageTranslations={pageTranslations}
+                        onHighlightClick={(highlightId) => {
+                          const highlight = highlights.find(
+                            (h) => h.id === highlightId,
+                          );
+                          if (highlight) onHighlightClick?.(highlight);
+                        }}
+                        onTextSelect={onTextSelect}
+                        onTranslationToggle={onTranslationToggle}
+                      />
+                    );
                   }
-                : null;
 
-            // Filter translations for this page
-            const pageTranslations = inlineTranslations.filter(
-              (t) => t.pageNumber === pageNum
-            );
-
-            return (
-              <PageCanvas
-                key={page.index}
-                page={page}
-                scale={scale}
-                pageNumber={pageNum}
-                pageHighlights={pageHighlights}
-                pageCitation={pageCitation}
-                pageTranslations={pageTranslations}
-                onHighlightClick={(highlightId) => {
-                  const highlight = highlights.find((h) => h.id === highlightId);
-                  if (highlight) {
-                    onHighlightClick?.(highlight);
+                  // Canvas rendering for pages with extractable text
+                  if (pdfPage && pageData) {
+                    return (
+                      <CanvasPage
+                        key={`canvas-${pageNum}`}
+                        pdfPage={pdfPage}
+                        pageData={pageData}
+                        scale={scale}
+                        pageNumber={pageNum}
+                        pageHighlights={pageHighlights}
+                        pageCitation={pageCitation}
+                        pageTranslations={pageTranslations}
+                        onHighlightClick={(highlightId) => {
+                          const highlight = highlights.find(
+                            (h) => h.id === highlightId,
+                          );
+                          if (highlight) onHighlightClick?.(highlight);
+                        }}
+                        onTextSelect={onTextSelect}
+                        onTranslationToggle={onTranslationToggle}
+                      />
+                    );
                   }
-                }}
-                onTextSelect={onTextSelect}
-                onTranslationToggle={onTranslationToggle}
-              />
-            );
-          })}
+
+                  return null;
+                },
+              )}
+            </>
+          )}
+
+          {/* Markdown mode rendering (original behavior) */}
+          {renderMode === "markdown" &&
+            pages.map((page) => {
+              const pageNum = page.index + 1;
+
+              // Filter highlights for this page
+              const pageHighlights: HighlightData[] = highlights
+                .filter((h) => h.pageNumber === pageNum)
+                .map((h) => ({
+                  id: h.id,
+                  rects: h.rects,
+                  color: h.color,
+                  text: h.selectedText,
+                  hasAnnotation: !!h.note,
+                }));
+
+              // Prepare citation for this page if active
+              const pageCitation: CitationHighlight | null =
+                activeCitation && activeCitation.page === pageNum
+                  ? {
+                      id: `citation-${pageNum}`,
+                      rects: [], // Rects will be computed by parent component
+                    }
+                  : null;
+
+              // Filter translations for this page
+              const pageTranslations = inlineTranslations.filter(
+                (t) => t.pageNumber === pageNum,
+              );
+
+              return (
+                <PageCanvas
+                  key={page.index}
+                  page={page}
+                  scale={scale}
+                  pageNumber={pageNum}
+                  pageHighlights={pageHighlights}
+                  pageCitation={pageCitation}
+                  pageTranslations={pageTranslations}
+                  onHighlightClick={(highlightId) => {
+                    const highlight = highlights.find(
+                      (h) => h.id === highlightId,
+                    );
+                    if (highlight) {
+                      onHighlightClick?.(highlight);
+                    }
+                  }}
+                  onTextSelect={onTextSelect}
+                  onTranslationToggle={onTranslationToggle}
+                />
+              );
+            })}
         </div>
       </div>
     </div>
@@ -350,7 +494,7 @@ interface PageCanvasProps {
   onTranslationToggle?: (translationId: string) => void;
 }
 
-// A4 dimensions in pixels at 96 DPI (standard screen)
+// Fallback A4 dimensions in pixels at 96 DPI (standard screen)
 const A4_WIDTH_PX = 794; // 210mm at 96 DPI
 const A4_HEIGHT_PX = 1123; // 297mm at 96 DPI
 
@@ -368,7 +512,7 @@ function PageCanvas({
   const pageRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLElement>(null);
   const [hoveredHighlightId, setHoveredHighlightId] = useState<string | null>(
-    null
+    null,
   );
 
   // Handle text selection
@@ -405,7 +549,7 @@ function PageCanvas({
     const walker = document.createTreeWalker(
       contentElement,
       NodeFilter.SHOW_TEXT,
-      null
+      null,
     );
 
     let charCount = 0;
@@ -445,41 +589,43 @@ function PageCanvas({
 
   // Utility function to clean and improve text punctuation
   const cleanText = (text: string): string => {
-    if (typeof text !== 'string') return text;
-    
-    return text
-      // Fix multiple spaces
-      .replace(/\s+/g, ' ')
-      // Ensure proper spacing after punctuation
-      .replace(/([.,;:!?])(\w)/g, '$1 $2')
-      // Fix spacing around quotes
-      .replace(/(\w)(")/g, '$1 $2')
-      .replace(/(")(\w)/g, '$1 $2')
-      // Fix spacing around parentheses
-      .replace(/(\w)([()])/g, '$1 $2')
-      .replace(/([()])(\w)/g, '$1 $2')
-      // Fix spacing around brackets
-      .replace(/(\w)(\[|\])/g, '$1 $2')
-      .replace(/(\[|\])(\w)/g, '$1 $2')
-      // Fix spacing around braces
-      .replace(/(\w)(\{|\})/g, '$1 $2')
-      .replace(/(\{|\})(\w)/g, '$1 $2')
-      // Fix common OCR errors
-      .replace(/(\w)(\.)(\w)/g, '$1. $3') // Add space after period
-      .replace(/(\w)(,)(\w)/g, '$1, $3')  // Add space after comma
-      .replace(/(\w)(;)(\w)/g, '$1; $3')  // Add space after semicolon
-      .replace(/(\w)(:)(\w)/g, '$1: $3')  // Add space after colon
-      // Fix common French punctuation
-      .replace(/(\w)(\?)(\w)/g, '$1? $3') // Add space after question mark
-      .replace(/(\w)(!)(\w)/g, '$1! $3')  // Add space after exclamation mark
-      // Fix French quotes
-      .replace(/(\w)(\«)/g, '$1 $2')     // Add space before French opening quote
-      .replace(/(\»)(\w)/g, '$1 $2')     // Add space after French closing quote
-      // Fix common OCR artifacts
-      .replace(/(\w)(\')(\w)/g, '$1\'$3') // Fix apostrophes in contractions
-      .replace(/(\w)(\-\-)(\w)/g, '$1 - $3') // Fix double hyphens
-      // Trim whitespace
-      .trim();
+    if (typeof text !== "string") return "";
+
+    return (
+      text
+        // Fix multiple spaces
+        .replace(/\s+/g, " ")
+        // Ensure proper spacing after punctuation
+        .replace(/([.,;:!?])(\w)/g, "$1 $2")
+        // Fix spacing around quotes
+        .replace(/(\w)(")/g, "$1 $2")
+        .replace(/(")(\w)/g, "$1 $2")
+        // Fix spacing around parentheses
+        .replace(/(\w)([()])/g, "$1 $2")
+        .replace(/([()])(\w)/g, "$1 $2")
+        // Fix spacing around brackets
+        .replace(/(\w)(\[|\])/g, "$1 $2")
+        .replace(/(\[|\])(\w)/g, "$1 $2")
+        // Fix spacing around braces
+        .replace(/(\w)(\{|\})/g, "$1 $2")
+        .replace(/(\{|\})(\w)/g, "$1 $2")
+        // Fix common OCR errors
+        .replace(/(\w)(\.)(\w)/g, "$1. $3") // Add space after period
+        .replace(/(\w)(,)(\w)/g, "$1, $3") // Add space after comma
+        .replace(/(\w)(;)(\w)/g, "$1; $3") // Add space after semicolon
+        .replace(/(\w)(:)(\w)/g, "$1: $3") // Add space after colon
+        // Fix common French punctuation
+        .replace(/(\w)(\?)(\w)/g, "$1? $3") // Add space after question mark
+        .replace(/(\w)(!)(\w)/g, "$1! $3") // Add space after exclamation mark
+        // Fix French quotes
+        .replace(/(\w)(\«)/g, "$1 $2") // Add space before French opening quote
+        .replace(/(\»)(\w)/g, "$1 $2") // Add space after French closing quote
+        // Fix common OCR artifacts
+        .replace(/(\w)(\')(\w)/g, "$1'$3") // Fix apostrophes in contractions
+        .replace(/(\w)(\-\-)(\w)/g, "$1 - $3") // Fix double hyphens
+        // Trim whitespace
+        .trim()
+    );
   };
 
   // Build image map for replacing markdown image references
@@ -513,22 +659,31 @@ function PageCanvas({
           // Handle image references with query parameters
           map.set(`${img.id}?raw=true`, dataUri);
           map.set(`${baseName}?raw=true`, dataUri);
-          
+
           // Handle common OCR image naming patterns
           map.set(`img-${img.id}`, dataUri);
           map.set(`figure-${img.id}`, dataUri);
           map.set(`fig-${img.id}`, dataUri);
           map.set(`image-${img.id}`, dataUri);
-          
+
           // Handle image references with different extensions
-          map.set(img.id.replace(/\.(jpeg|jpg|png|gif|webp)$/i, '.png'), dataUri);
-          map.set(img.id.replace(/\.(jpeg|jpg|png|gif|webp)$/i, '.jpg'), dataUri);
-          map.set(img.id.replace(/\.(jpeg|jpg|png|gif|webp)$/i, '.jpeg'), dataUri);
-          
+          map.set(
+            img.id.replace(/\.(jpeg|jpg|png|gif|webp)$/i, ".png"),
+            dataUri,
+          );
+          map.set(
+            img.id.replace(/\.(jpeg|jpg|png|gif|webp)$/i, ".jpg"),
+            dataUri,
+          );
+          map.set(
+            img.id.replace(/\.(jpeg|jpg|png|gif|webp)$/i, ".jpeg"),
+            dataUri,
+          );
+
           // Handle image references with size suffixes
-          map.set(img.id.replace(/(\.\w+)$/, '-small$1'), dataUri);
-          map.set(img.id.replace(/(\.\w+)$/, '-thumb$1'), dataUri);
-          map.set(img.id.replace(/(\.\w+)$/, '-large$1'), dataUri);
+          map.set(img.id.replace(/(\.\w+)$/, "-small$1"), dataUri);
+          map.set(img.id.replace(/(\.\w+)$/, "-thumb$1"), dataUri);
+          map.set(img.id.replace(/(\.\w+)$/, "-large$1"), dataUri);
         }
       }
     }
@@ -539,50 +694,89 @@ function PageCanvas({
   const processedMarkdown = useMemo(() => {
     let markdown = page.markdown || "";
 
-    // Fix common punctuation issues
-    // Add spaces after punctuation if missing
-    markdown = markdown.replace(/([.,;:!?])(\w)/g, "$1 $2");
-    
-    // Fix missing spaces around parentheses
-    markdown = markdown.replace(/(\w)([()])/g, "$1 $2");
-    markdown = markdown.replace(/([()])(\w)/g, "$1 $2");
+    // ===== PHASE 1: Remove malformed objects and artifacts =====
+    // Remove [object Object] in all variations
+    markdown = markdown
+      .replace(/\[\s*object\s+Object\s*\]/gi, "")
+      .replace(/\(\s*object\s+Object\s*\)/gi, "")
+      .replace(/\{\s*object\s+Object\s*\}/gi, "")
+      .replace(/\bObject\s*,?\s*Object\b/gi, "")
+      .replace(/\[object\s+\w+\]/gi, "") // [object Array], [object Map], etc.
+      .replace(/,\s*object Object\s*,?/gi, ",")
+      .replace(/^\s*object Object\s*$/gim, "")
+      // Remove empty markdown links/images left after artifact removal
+      .replace(/\[\s*\]\(\s*\)/g, "")
+      .replace(/!\[\s*\]\(\s*\)/g, "");
 
-    // Ensure proper spacing around quotes
-    markdown = markdown.replace(/(\w)(")/g, "$1 $2");
-    markdown = markdown.replace(/(")(\w)/g, "$1 $2");
-
-    // Fix common title formatting issues
-    // Ensure titles have proper spacing
-    markdown = markdown.replace(/^(#{1,6})(\S)/gm, "$1 $2");
+    // ===== PHASE 2: Fix markdown structure =====
+    // Ensure headers have proper spacing
+    markdown = markdown.replace(/^(#{1,6})([^\s#])/gm, "$1 $2");
+    markdown = markdown.replace(/(\n#{1,6})([^\s#])/g, "$1 $2");
 
     // Fix list items with missing spaces
-    markdown = markdown.replace(/^(\*|\-|\+|\d+\.)(\S)/gm, "$1 $2");
+    markdown = markdown.replace(/^(\*|\-|\+)([^\s\*\-\+])/gm, "$1 $2");
+    markdown = markdown.replace(/^(\d+\.)([^\s])/gm, "$1 $2");
+    markdown = markdown.replace(/(\n\*|\n\-|\n\+)([^\s\*\-\+])/g, "$1 $2");
+    markdown = markdown.replace(/(\n\d+\.)([^\s])/g, "$1 $2");
 
-    // Fix common OCR errors in markdown structure
-    markdown = markdown.replace(/(\n#{1,6})(\S)/g, "$1 $2"); // Ensure spacing after newlines and headers
-    markdown = markdown.replace(/(\n\*|\n\-|\n\+|\n\d+\.)(\S)/g, "$1 $2"); // Ensure spacing in lists
-    
-    // Fix multiple consecutive newlines that can break markdown parsing
-    markdown = markdown.replace(/\n{3,}/g, '\n\n');
+    // ===== PHASE 3: Fix punctuation and spacing =====
+    // Add spaces after punctuation if missing (but not in URLs or numbers)
+    markdown = markdown.replace(/([.,;:!?])([a-zA-ZÀ-ÿ])/g, "$1 $2");
 
-    // Fix common OCR artifacts
-    markdown = markdown.replace(/\s+(\n|$)/g, '$1'); // Remove trailing spaces
-    markdown = markdown.replace(/^\s+/, ''); // Remove leading spaces
+    // Fix spacing around parentheses (careful with markdown links)
+    markdown = markdown.replace(/([a-zA-ZÀ-ÿ])(\()/g, "$1 $2");
+    markdown = markdown.replace(/(\))([a-zA-ZÀ-ÿ])/g, "$1 $2");
 
-    // Fix common French punctuation issues
-    markdown = markdown.replace(/(\w)(\?)(\w)/g, '$1? $3'); // Add space after question mark
-    markdown = markdown.replace(/(\w)(!)(\w)/g, '$1! $3');  // Add space after exclamation mark
-    
-    // Fix common OCR errors with French quotes
-    markdown = markdown.replace(/(\w)(\«)/g, '$1 $2');     // Add space before French opening quote
-    markdown = markdown.replace(/(\»)(\w)/g, '$1 $2');     // Add space after French closing quote
-    
+    // Fix spacing around quotes
+    markdown = markdown.replace(/([a-zA-ZÀ-ÿ])(")/g, "$1 $2");
+    markdown = markdown.replace(/(")([a-zA-ZÀ-ÿ])/g, "$1 $2");
+
+    // Fix French punctuation (space before : ; ? !)
+    markdown = markdown.replace(/([a-zA-ZÀ-ÿ])([;:?!])/g, "$1 $2");
+
+    // Fix French quotes
+    markdown = markdown.replace(/([a-zA-ZÀ-ÿ])(«)/g, "$1 $2");
+    markdown = markdown.replace(/(»)([a-zA-ZÀ-ÿ])/g, "$1 $2");
+
+    // ===== PHASE 4: Clean up whitespace and artifacts =====
+    // Fix multiple consecutive newlines
+    markdown = markdown.replace(/\n{4,}/g, "\n\n\n");
+
+    // Collapse multiple spaces (but preserve code blocks)
+    markdown = markdown.replace(/([^`\n])[ \t]{2,}([^`])/g, "$1 $2");
+
+    // Remove trailing spaces per line
+    markdown = markdown.replace(/[ \t]+$/gm, "");
+
+    // Clean up comma artifacts
+    markdown = markdown.replace(/,\s*,+/g, ",");
+    markdown = markdown.replace(/\s+,/g, ",");
+    markdown = markdown.replace(/,(\s*\n)/g, "$1");
+
+    // Remove orphaned punctuation on its own line
+    markdown = markdown.replace(/^\s*[.,;:]+\s*$/gm, "");
+
+    // Fix double punctuation
+    markdown = markdown.replace(/([.!?])\1+/g, "$1");
+    markdown = markdown.replace(/,\.+/g, ".");
+
+    // Remove empty list items
+    markdown = markdown.replace(/^[\*\-\+]\s*$/gm, "");
+    markdown = markdown.replace(/^\d+\.\s*$/gm, "");
+
+    // Trim overall
+    markdown = markdown.trim();
+
     return markdown;
   }, [page.markdown]);
 
   // Calculate scaled dimensions
-  const scaledWidth = A4_WIDTH_PX * scale;
-  const scaledHeight = A4_HEIGHT_PX * scale;
+  const baseWidth = page.dimensions?.width || A4_WIDTH_PX;
+  const baseHeight = page.dimensions?.height || A4_HEIGHT_PX;
+  const scaledWidth = baseWidth * scale;
+  const scaledHeight = baseHeight * scale;
+  const paddingX = Math.round(baseWidth * 0.07 * scale);
+  const paddingY = Math.round(baseHeight * 0.045 * scale);
 
   return (
     <div
@@ -619,7 +813,7 @@ function PageCanvas({
         ref={contentRef}
         className="relative select-text"
         style={{
-          padding: `${48 * scale}px ${56 * scale}px`,
+          padding: `${paddingY}px ${paddingX}px`,
           fontSize: `${14 * scale}px`,
           lineHeight: 1.6,
         }}
@@ -631,7 +825,9 @@ function PageCanvas({
             // Images - resolve from imageMap and render full width with better error handling
             img: ({ src, alt }) => {
               const originalSrc = typeof src === "string" ? src : "";
-              const cleanSrc = originalSrc ? originalSrc.replace(/^\.?\//, "") : "";
+              const cleanSrc = originalSrc
+                ? originalSrc.replace(/^\.?\//, "")
+                : "";
 
               // Try to resolve from imageMap - more comprehensive search
               const resolvedSrc =
@@ -649,10 +845,15 @@ function PageCanvas({
 
               if (!resolvedSrc) {
                 // No image data available, show improved placeholder
-                console.warn(`Image not found: ${originalSrc}`, { alt, availableImages: Array.from(imageMap.keys()) });
+                console.warn(`Image not found: ${originalSrc}`, {
+                  alt,
+                  availableImages: Array.from(imageMap.keys()),
+                });
                 return (
                   <div className="block my-6 p-6 bg-slate-50 border-2 border-slate-200 border-dashed text-slate-500 text-center rounded-lg">
-                    <div className="text-sm font-medium text-slate-600 mb-2">📷 IMAGE NOT AVAILABLE</div>
+                    <div className="text-sm font-medium text-slate-600 mb-2">
+                      📷 IMAGE NOT AVAILABLE
+                    </div>
                     <div className="text-xs break-words max-w-full">
                       {alt ? (
                         <>
@@ -687,7 +888,7 @@ function PageCanvas({
             table: ({ children }) => {
               // Check if table has valid content
               const hasContent = Children.count(children) > 0;
-              
+
               if (!hasContent) {
                 return (
                   <div className="my-6 p-4 bg-slate-50 border border-slate-200 rounded-sm text-slate-500 text-center">
@@ -699,9 +900,12 @@ function PageCanvas({
               // Count actual rows to ensure table has meaningful content
               let rowCount = 0;
               Children.forEach(children, (child) => {
-                if (isValidElement(child) && (child.type === 'thead' || child.type === 'tbody')) {
+                if (
+                  isValidElement(child) &&
+                  (child.type === "thead" || child.type === "tbody")
+                ) {
                   Children.forEach(getElementChildren(child), (row) => {
-                    if (isValidElement(row) && row.type === 'tr') {
+                    if (isValidElement(row) && row.type === "tr") {
                       rowCount++;
                     }
                   });
@@ -719,11 +923,17 @@ function PageCanvas({
               // Count cells to ensure table has meaningful content
               let cellCount = 0;
               Children.forEach(children, (child) => {
-                if (isValidElement(child) && (child.type === 'thead' || child.type === 'tbody')) {
+                if (
+                  isValidElement(child) &&
+                  (child.type === "thead" || child.type === "tbody")
+                ) {
                   Children.forEach(getElementChildren(child), (row) => {
-                    if (isValidElement(row) && row.type === 'tr') {
+                    if (isValidElement(row) && row.type === "tr") {
                       Children.forEach(getElementChildren(row), (cell) => {
-                        if (isValidElement(cell) && (cell.type === 'th' || cell.type === 'td')) {
+                        if (
+                          isValidElement(cell) &&
+                          (cell.type === "th" || cell.type === "td")
+                        ) {
                           cellCount++;
                         }
                       });
@@ -743,13 +953,21 @@ function PageCanvas({
               // Count non-empty cells to ensure table has meaningful content
               let nonEmptyCellCount = 0;
               Children.forEach(children, (child) => {
-                if (isValidElement(child) && (child.type === 'thead' || child.type === 'tbody')) {
+                if (
+                  isValidElement(child) &&
+                  (child.type === "thead" || child.type === "tbody")
+                ) {
                   Children.forEach(getElementChildren(child), (row) => {
-                    if (isValidElement(row) && row.type === 'tr') {
+                    if (isValidElement(row) && row.type === "tr") {
                       Children.forEach(getElementChildren(row), (cell) => {
-                        if (isValidElement(cell) && (cell.type === 'th' || cell.type === 'td')) {
+                        if (
+                          isValidElement(cell) &&
+                          (cell.type === "th" || cell.type === "td")
+                        ) {
                           const cellContent = getElementChildren(cell);
-                          const hasCellContent = cellContent && cellContent.toString().trim().length > 0;
+                          const hasCellContent =
+                            cellContent &&
+                            cellContent.toString().trim().length > 0;
                           if (hasCellContent) {
                             nonEmptyCellCount++;
                           }
@@ -778,7 +996,7 @@ function PageCanvas({
             },
             thead: ({ children }) => {
               const hasContent = Children.count(children) > 0;
-              
+
               if (!hasContent) {
                 return null;
               }
@@ -786,9 +1004,9 @@ function PageCanvas({
               // Count actual header cells to ensure thead has meaningful content
               let cellCount = 0;
               Children.forEach(children, (child) => {
-                if (isValidElement(child) && child.type === 'tr') {
+                if (isValidElement(child) && child.type === "tr") {
                   Children.forEach(getElementChildren(child), (cell) => {
-                    if (isValidElement(cell) && cell.type === 'th') {
+                    if (isValidElement(cell) && cell.type === "th") {
                       cellCount++;
                     }
                   });
@@ -802,11 +1020,12 @@ function PageCanvas({
               // Count non-empty header cells to ensure thead has meaningful content
               let nonEmptyCellCount = 0;
               Children.forEach(children, (child) => {
-                if (isValidElement(child) && child.type === 'tr') {
+                if (isValidElement(child) && child.type === "tr") {
                   Children.forEach(getElementChildren(child), (cell) => {
-                    if (isValidElement(cell) && cell.type === 'th') {
+                    if (isValidElement(cell) && cell.type === "th") {
                       const cellContent = getElementChildren(cell);
-                      const hasCellContent = cellContent && cellContent.toString().trim().length > 0;
+                      const hasCellContent =
+                        cellContent && cellContent.toString().trim().length > 0;
                       if (hasCellContent) {
                         nonEmptyCellCount++;
                       }
@@ -826,47 +1045,61 @@ function PageCanvas({
               );
             },
             th: ({ children }) => {
-              const content = typeof children === 'string' ? cleanText(children) : children;
-              const hasContent = content && content.toString().trim().length > 0;
+              const content =
+                typeof children === "string" ? cleanText(children) : children;
+              const hasContent =
+                content && content.toString().trim().length > 0;
 
               // Ensure content is properly formatted
-              const formattedContent = isValidElement(content) 
-                ? content 
+              const formattedContent = isValidElement(content)
+                ? content
                 : cleanText(String(content ?? ""));
 
               return (
                 <th className="px-4 py-3 text-left font-semibold text-slate-900 border border-slate-200 bg-slate-50 sticky top-0 hyphens-auto">
-                  {hasContent ? formattedContent : <span className="text-slate-400 italic">N/A</span>}
+                  {hasContent ? (
+                    formattedContent
+                  ) : (
+                    <span className="text-slate-400 italic">N/A</span>
+                  )}
                 </th>
               );
             },
             td: ({ children }) => {
-              const content = typeof children === 'string' ? cleanText(children) : children;
-              const hasContent = content && content.toString().trim().length > 0;
+              const content =
+                typeof children === "string" ? cleanText(children) : children;
+              const hasContent =
+                content && content.toString().trim().length > 0;
 
               // Ensure content is properly formatted
-              const formattedContent = isValidElement(content) 
-                ? content 
+              const formattedContent = isValidElement(content)
+                ? content
                 : cleanText(String(content ?? ""));
 
               return (
                 <td className="px-4 py-3 text-slate-800 border border-slate-200 hyphens-auto">
-                  {hasContent ? formattedContent : <span className="text-slate-400 italic">—</span>}
+                  {hasContent ? (
+                    formattedContent
+                  ) : (
+                    <span className="text-slate-400 italic">—</span>
+                  )}
                 </td>
               );
             },
             // Headings - professional document style with improved hierarchy
             h1: ({ children }) => {
-              const content = typeof children === 'string' ? cleanText(children) : children;
-              const hasContent = content && content.toString().trim().length > 0;
+              const content =
+                typeof children === "string" ? cleanText(children) : children;
+              const hasContent =
+                content && content.toString().trim().length > 0;
 
               if (!hasContent) {
                 return null; // Don't render empty headings
               }
 
               // Ensure content is properly formatted
-              const formattedContent = isValidElement(content) 
-                ? content 
+              const formattedContent = isValidElement(content)
+                ? content
                 : cleanText(String(content ?? ""));
 
               return (
@@ -876,16 +1109,18 @@ function PageCanvas({
               );
             },
             h2: ({ children }) => {
-              const content = typeof children === 'string' ? cleanText(children) : children;
-              const hasContent = content && content.toString().trim().length > 0;
+              const content =
+                typeof children === "string" ? cleanText(children) : children;
+              const hasContent =
+                content && content.toString().trim().length > 0;
 
               if (!hasContent) {
                 return null; // Don't render empty headings
               }
 
               // Ensure content is properly formatted
-              const formattedContent = isValidElement(content) 
-                ? content 
+              const formattedContent = isValidElement(content)
+                ? content
                 : cleanText(String(content ?? ""));
 
               return (
@@ -895,16 +1130,18 @@ function PageCanvas({
               );
             },
             h3: ({ children }) => {
-              const content = typeof children === 'string' ? cleanText(children) : children;
-              const hasContent = content && content.toString().trim().length > 0;
+              const content =
+                typeof children === "string" ? cleanText(children) : children;
+              const hasContent =
+                content && content.toString().trim().length > 0;
 
               if (!hasContent) {
                 return null; // Don't render empty headings
               }
 
               // Ensure content is properly formatted
-              const formattedContent = isValidElement(content) 
-                ? content 
+              const formattedContent = isValidElement(content)
+                ? content
                 : cleanText(String(content ?? ""));
 
               return (
@@ -914,16 +1151,18 @@ function PageCanvas({
               );
             },
             h4: ({ children }) => {
-              const content = typeof children === 'string' ? cleanText(children) : children;
-              const hasContent = content && content.toString().trim().length > 0;
+              const content =
+                typeof children === "string" ? cleanText(children) : children;
+              const hasContent =
+                content && content.toString().trim().length > 0;
 
               if (!hasContent) {
                 return null; // Don't render empty headings
               }
 
               // Ensure content is properly formatted
-              const formattedContent = isValidElement(content) 
-                ? content 
+              const formattedContent = isValidElement(content)
+                ? content
                 : cleanText(String(content ?? ""));
 
               return (
@@ -933,16 +1172,18 @@ function PageCanvas({
               );
             },
             h5: ({ children }) => {
-              const content = typeof children === 'string' ? cleanText(children) : children;
-              const hasContent = content && content.toString().trim().length > 0;
+              const content =
+                typeof children === "string" ? cleanText(children) : children;
+              const hasContent =
+                content && content.toString().trim().length > 0;
 
               if (!hasContent) {
                 return null; // Don't render empty headings
               }
 
               // Ensure content is properly formatted
-              const formattedContent = isValidElement(content) 
-                ? content 
+              const formattedContent = isValidElement(content)
+                ? content
                 : cleanText(String(content ?? ""));
 
               return (
@@ -952,16 +1193,18 @@ function PageCanvas({
               );
             },
             h6: ({ children }) => {
-              const content = typeof children === 'string' ? cleanText(children) : children;
-              const hasContent = content && content.toString().trim().length > 0;
+              const content =
+                typeof children === "string" ? cleanText(children) : children;
+              const hasContent =
+                content && content.toString().trim().length > 0;
 
               if (!hasContent) {
                 return null; // Don't render empty headings
               }
 
               // Ensure content is properly formatted
-              const formattedContent = isValidElement(content) 
-                ? content 
+              const formattedContent = isValidElement(content)
+                ? content
                 : cleanText(String(content ?? ""));
 
               return (
@@ -972,16 +1215,18 @@ function PageCanvas({
             },
             // Paragraphs with improved typography
             p: ({ children }) => {
-              const content = typeof children === 'string' ? cleanText(children) : children;
-              const hasContent = content && content.toString().trim().length > 0;
+              const content =
+                typeof children === "string" ? cleanText(children) : children;
+              const hasContent =
+                content && content.toString().trim().length > 0;
 
               if (!hasContent) {
                 return null; // Don't render empty paragraphs
               }
 
               // Ensure content is properly formatted
-              const formattedContent = isValidElement(content) 
-                ? content 
+              const formattedContent = isValidElement(content)
+                ? content
                 : cleanText(String(content ?? ""));
 
               return (
@@ -993,7 +1238,7 @@ function PageCanvas({
             // Lists with better spacing and styling
             ul: ({ children }) => {
               const hasContent = Children.count(children) > 0;
-              
+
               if (!hasContent) {
                 return null; // Don't render empty lists
               }
@@ -1006,7 +1251,7 @@ function PageCanvas({
             },
             ol: ({ children }) => {
               const hasContent = Children.count(children) > 0;
-              
+
               if (!hasContent) {
                 return null; // Don't render empty lists
               }
@@ -1018,16 +1263,18 @@ function PageCanvas({
               );
             },
             li: ({ children }) => {
-              const content = typeof children === 'string' ? cleanText(children) : children;
-              const hasContent = content && content.toString().trim().length > 0;
+              const content =
+                typeof children === "string" ? cleanText(children) : children;
+              const hasContent =
+                content && content.toString().trim().length > 0;
 
               if (!hasContent) {
                 return null; // Don't render empty list items
               }
 
               // Ensure content is properly formatted
-              const formattedContent = isValidElement(content) 
-                ? content 
+              const formattedContent = isValidElement(content)
+                ? content
                 : cleanText(String(content ?? ""));
 
               return (
@@ -1039,16 +1286,18 @@ function PageCanvas({
             // Code blocks with improved styling
             code: ({ children, className }) => {
               const isBlock = className?.includes("language-");
-              const content = typeof children === 'string' ? children.trim() : children;
-              const hasContent = content && content.toString().trim().length > 0;
+              const content =
+                typeof children === "string" ? children.trim() : children;
+              const hasContent =
+                content && content.toString().trim().length > 0;
 
               if (!hasContent) {
                 return null; // Don't render empty code blocks
               }
 
               // Ensure content is properly formatted
-              const formattedContent = isValidElement(content) 
-                ? content 
+              const formattedContent = isValidElement(content)
+                ? content
                 : cleanText(String(content ?? ""));
 
               return isBlock ? (
@@ -1069,21 +1318,25 @@ function PageCanvas({
               }
 
               return (
-                <pre className="my-4 overflow-x-auto rounded-md">{children}</pre>
+                <pre className="my-4 overflow-x-auto rounded-md">
+                  {children}
+                </pre>
               );
             },
             // Blockquote with improved styling
             blockquote: ({ children }) => {
-              const content = typeof children === 'string' ? cleanText(children) : children;
-              const hasContent = content && content.toString().trim().length > 0;
+              const content =
+                typeof children === "string" ? cleanText(children) : children;
+              const hasContent =
+                content && content.toString().trim().length > 0;
 
               if (!hasContent) {
                 return null; // Don't render empty blockquotes
               }
 
               // Ensure content is properly formatted
-              const formattedContent = isValidElement(content) 
-                ? content 
+              const formattedContent = isValidElement(content)
+                ? content
                 : cleanText(String(content ?? ""));
 
               return (
@@ -1094,17 +1347,20 @@ function PageCanvas({
             },
             // Links with improved styling
             a: ({ href, children }) => {
-              const content = typeof children === 'string' ? cleanText(children) : children;
-              const hasContent = content && content.toString().trim().length > 0;
-              const hasValidHref = href && href.toString().trim().length > 0 && href !== '#';
+              const content =
+                typeof children === "string" ? cleanText(children) : children;
+              const hasContent =
+                content && content.toString().trim().length > 0;
+              const hasValidHref =
+                href && href.toString().trim().length > 0 && href !== "#";
 
               if (!hasContent || !hasValidHref) {
                 return null; // Don't render empty or invalid links
               }
 
               // Ensure content is properly formatted
-              const formattedContent = isValidElement(content) 
-                ? content 
+              const formattedContent = isValidElement(content)
+                ? content
                 : cleanText(String(content ?? ""));
 
               return (
@@ -1125,16 +1381,18 @@ function PageCanvas({
             },
             // Strong/bold with improved styling
             strong: ({ children }) => {
-              const content = typeof children === 'string' ? cleanText(children) : children;
-              const hasContent = content && content.toString().trim().length > 0;
+              const content =
+                typeof children === "string" ? cleanText(children) : children;
+              const hasContent =
+                content && content.toString().trim().length > 0;
 
               if (!hasContent) {
                 return null; // Don't render empty strong elements
               }
 
               // Ensure content is properly formatted
-              const formattedContent = isValidElement(content) 
-                ? content 
+              const formattedContent = isValidElement(content)
+                ? content
                 : cleanText(String(content ?? ""));
 
               return (
@@ -1145,16 +1403,18 @@ function PageCanvas({
             },
             // Emphasis/italic with improved styling
             em: ({ children }) => {
-              const content = typeof children === 'string' ? cleanText(children) : children;
-              const hasContent = content && content.toString().trim().length > 0;
+              const content =
+                typeof children === "string" ? cleanText(children) : children;
+              const hasContent =
+                content && content.toString().trim().length > 0;
 
               if (!hasContent) {
                 return null; // Don't render empty em elements
               }
 
               // Ensure content is properly formatted
-              const formattedContent = isValidElement(content) 
-                ? content 
+              const formattedContent = isValidElement(content)
+                ? content
                 : cleanText(String(content ?? ""));
 
               return (
@@ -1203,10 +1463,7 @@ function getSelectionRects(
   return mergeSelectionRects(rects);
 }
 
-function normalizeRect(
-  rect: DOMRect,
-  pageRect: DOMRect,
-): HighlightRect | null {
+function normalizeRect(rect: DOMRect, pageRect: DOMRect): HighlightRect | null {
   const left = Math.max(rect.left, pageRect.left);
   const right = Math.min(rect.right, pageRect.right);
   const top = Math.max(rect.top, pageRect.top);
@@ -1255,6 +1512,145 @@ function mergeSelectionRects(rects: HighlightRect[]): HighlightRect[] {
 
   merged.push(current);
   return merged;
+}
+
+/**
+ * CanvasPage Component - Renders a page using PDF.js canvas
+ * Used in canvas and hybrid rendering modes
+ */
+interface CanvasPageProps {
+  pdfPage: PDFPageProxyLocal;
+  pageData: PageData;
+  scale: number;
+  pageNumber: number;
+  pageHighlights: HighlightData[];
+  pageCitation: CitationHighlight | null;
+  pageTranslations: InlineTranslation[];
+  onHighlightClick?: (highlightId: string) => void;
+  onTextSelect?: (selection: SmartSelectionData | null) => void;
+  onTranslationToggle?: (translationId: string) => void;
+}
+
+// Local type to avoid conflict with global PDFPageProxy
+interface PDFPageProxyLocal {
+  getViewport: (options: { scale: number }) => PDFViewportLocal;
+  render: (options: {
+    canvasContext: CanvasRenderingContext2D;
+    viewport: PDFViewportLocal;
+  }) => { promise: Promise<void>; cancel: () => void };
+}
+
+interface PDFViewportLocal {
+  width: number;
+  height: number;
+  scale: number;
+}
+
+function CanvasPage({
+  pdfPage,
+  pageData,
+  scale,
+  pageNumber,
+  pageHighlights,
+  pageCitation,
+  pageTranslations,
+  onHighlightClick,
+  onTextSelect,
+  onTranslationToggle,
+}: CanvasPageProps) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [dimensions, setDimensions] = useState({ width: 0, height: 0 });
+  const [hoveredHighlightId, setHoveredHighlightId] = useState<string | null>(
+    null,
+  );
+
+  // Handle canvas render callback
+  const handleCanvasRender = useCallback(
+    (dims: { width: number; height: number }) => {
+      setDimensions(dims);
+    },
+    [],
+  );
+
+  // Handle text selection from PDFTextLayer
+  const handleTextSelect = useCallback(
+    (
+      selection: {
+        pageNumber: number;
+        startOffset: number;
+        endOffset: number;
+        selectedText: string;
+        position: { x: number; y: number };
+        rects: HighlightRect[];
+      } | null,
+    ) => {
+      if (!selection) {
+        onTextSelect?.(null);
+        return;
+      }
+      onTextSelect?.(selection);
+    },
+    [onTextSelect],
+  );
+
+  return (
+    <div
+      ref={containerRef}
+      className="relative bg-white shadow-[0_4px_20px_rgba(0,0,0,0.3)] transition-shadow hover:shadow-[0_8px_30px_rgba(0,0,0,0.4)]"
+      style={{
+        width: dimensions.width || "auto",
+        height: dimensions.height || "auto",
+        maxWidth: "95vw",
+      }}
+      data-page-number={pageNumber}
+      data-render-mode="canvas"
+    >
+      {/* Canvas Layer - Visual source */}
+      <CanvasLayer
+        page={pdfPage}
+        scale={scale}
+        pageNumber={pageNumber}
+        onRender={handleCanvasRender}
+      />
+
+      {/* Text Layer - Selectable text */}
+      {dimensions.width > 0 && (
+        <PDFTextLayer
+          textItems={pageData.textItems}
+          width={dimensions.width}
+          height={dimensions.height}
+          pageNumber={pageNumber}
+          onTextSelect={handleTextSelect}
+        />
+      )}
+
+      {/* Highlight Layer */}
+      <HighlightLayer
+        highlights={pageHighlights}
+        onHighlightClick={onHighlightClick}
+        onHighlightHover={setHoveredHighlightId}
+        hoveredHighlightId={hoveredHighlightId}
+      />
+
+      {/* Translation Layer */}
+      <TranslationLayer
+        translations={pageTranslations}
+        scale={scale}
+        onToggle={onTranslationToggle}
+      />
+
+      {/* Citation Layer */}
+      <CitationLayer citation={pageCitation} />
+
+      {/* Page number */}
+      <div
+        className="absolute bottom-0 left-0 right-0 text-center pb-4 text-slate-400 text-xs"
+        style={{ fontSize: `${10 * scale}px` }}
+      >
+        {pageNumber}
+      </div>
+    </div>
+  );
 }
 
 export default SmartPDFViewer;

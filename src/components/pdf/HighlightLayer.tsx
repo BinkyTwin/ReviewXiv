@@ -51,7 +51,7 @@ export function HighlightLayer({
       {rects.map((rect, index) => (
         <div
           key={index}
-          className="absolute highlight-orange animate-pulse rounded-sm"
+          className="absolute highlight-orange citation-flash rounded-sm"
           style={{
             left: pageRect.left + rect.x * pageRect.width,
             top: pageRect.top + rect.y * pageRect.height,

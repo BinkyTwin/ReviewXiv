@@ -88,7 +88,7 @@ export const CitationLayer = memo(function CitationLayer({
           className={cn(
             "absolute rounded-sm",
             "highlight-orange",
-            "animate-pulse"
+            "citation-flash"
           )}
           style={{
             left: `${rect.x * 100}%`,

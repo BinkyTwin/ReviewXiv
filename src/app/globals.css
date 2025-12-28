@@ -87,6 +87,12 @@
   .highlight-purple {
     background-color: hsl(var(--highlight-purple) / 0.35);
   }
+
+  .citation-flash {
+    animation: citation-flash 2.4s ease-out both;
+    transform-origin: center;
+    will-change: opacity, transform, box-shadow;
+  }
 }
 
 /* Animations */
@@ -123,6 +129,36 @@
 
   50% {
     box-shadow: 0 0 40px hsl(var(--primary) / 0.6);
+  }
+}
+
+@keyframes citation-flash {
+  0% {
+    opacity: 0;
+    transform: scale(0.98);
+    box-shadow: 0 0 0 0 hsl(var(--highlight-orange) / 0);
+  }
+
+  20% {
+    opacity: 1;
+    transform: scale(1);
+    box-shadow:
+      0 0 0 1px hsl(var(--highlight-orange) / 0.6),
+      0 0 12px hsl(var(--highlight-orange) / 0.45);
+  }
+
+  60% {
+    opacity: 0.85;
+    transform: scale(1.01);
+    box-shadow:
+      0 0 0 1px hsl(var(--highlight-orange) / 0.4),
+      0 0 18px hsl(var(--highlight-orange) / 0.5);
+  }
+
+  100% {
+    opacity: 0;
+    transform: scale(1.015);
+    box-shadow: 0 0 0 0 hsl(var(--highlight-orange) / 0);
   }
 }
 

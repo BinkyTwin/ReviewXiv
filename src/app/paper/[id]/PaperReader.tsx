@@ -105,6 +105,14 @@ export function PaperReader({ paper, pdfUrl }: PaperReaderProps) {
     return map;
   }, [paper.paper_pages]);
 
+  const pageTextMap = useMemo(() => {
+    const map = new Map<number, string>();
+    for (const page of paper.paper_pages) {
+      map.set(page.page_number, page.text_content || "");
+    }
+    return map;
+  }, [paper.paper_pages]);
+
   // Fetch highlights on mount
   useEffect(() => {
     const fetchHighlights = async () => {
@@ -122,12 +130,88 @@ export function PaperReader({ paper, pdfUrl }: PaperReaderProps) {
     fetchHighlights();
   }, [paper.id]);
 
+  // Fetch inline translations on mount
+  useEffect(() => {
+    const fetchTranslations = async () => {
+      try {
+        const response = await fetch(`/api/translations?paperId=${paper.id}`);
+        if (response.ok) {
+          const data = await response.json();
+          setInlineTranslations(data.translations || []);
+        }
+      } catch (error) {
+        console.error("Error fetching translations:", error);
+      }
+    };
+
+    fetchTranslations();
+  }, [paper.id]);
+
   // Handle citation click from chat
   const handleCitationClick = useCallback((citation: Citation) => {
     setActiveCitation(citation);
     // Clear after animation
     setTimeout(() => setActiveCitation(null), 3500);
   }, []);
+
+  const handleSaveCitation = useCallback(
+    async (citation: Citation) => {
+      const existingHighlight = highlights.find(
+        (highlight) =>
+          highlight.pageNumber === citation.page &&
+          highlight.startOffset === citation.start &&
+          highlight.endOffset === citation.end,
+      );
+
+      if (existingHighlight) {
+        return;
+      }
+
+      const pageTextItems = textItemsMap.get(citation.page);
+      if (!pageTextItems) {
+        console.warn("Missing text items for citation highlight.");
+        return;
+      }
+
+      const rects = offsetsToRects(citation, pageTextItems);
+      if (rects.length === 0) {
+        console.warn("No rects found for citation highlight.");
+        return;
+      }
+
+      const pageText = pageTextMap.get(citation.page) || "";
+      const selectedText =
+        citation.start >= 0 && citation.end <= pageText.length
+          ? pageText.slice(citation.start, citation.end).trim()
+          : citation.quote || "";
+
+      try {
+        const response = await fetch("/api/highlights", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            paperId: paper.id,
+            pageNumber: citation.page,
+            startOffset: citation.start,
+            endOffset: citation.end,
+            selectedText: selectedText || citation.quote || "",
+            rects,
+            color: "yellow",
+          }),
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          setHighlights((prev) => [...prev, data.highlight]);
+        } else {
+          console.error("Failed to save citation highlight.");
+        }
+      } catch (error) {
+        console.error("Error saving citation highlight:", error);
+      }
+    },
+    [highlights, pageTextMap, paper.id, textItemsMap],
+  );
 
   // Handle text selection in PDF
   const handleTextSelect = useCallback(
@@ -256,39 +340,83 @@ export function PaperReader({ paper, pdfUrl }: PaperReaderProps) {
 
   // Handle applying translation inline on the document
   const handleApplyInlineTranslation = useCallback(
-    (result: {
+    async (result: {
       sourceText: string;
       targetLanguage: string;
       translatedText: string;
     }) => {
       if (!selection) return;
 
-      // Create a new inline translation
-      const newTranslation: InlineTranslation = {
-        id: `translation-${Date.now()}`,
-        pageNumber: selection.page,
-        sourceText: result.sourceText,
-        targetLanguage: result.targetLanguage,
-        translatedText: result.translatedText,
-        startOffset: selection.startOffset,
-        endOffset: selection.endOffset,
-        rects: [], // TODO: Compute rects from selection
-        isActive: true, // Show translation by default
-      };
+      // Get rects from selection if available
+      const rects = selection.rects || [];
 
-      setInlineTranslations((prev) => [...prev, newTranslation]);
+      try {
+        const response = await fetch("/api/translations", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            paperId: paper.id,
+            pageNumber: selection.page,
+            sourceText: result.sourceText,
+            targetLanguage: result.targetLanguage,
+            translatedText: result.translatedText,
+            startOffset: selection.startOffset,
+            endOffset: selection.endOffset,
+            rects,
+            isActive: true,
+          }),
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          setInlineTranslations((prev) => [...prev, data.translation]);
+        } else {
+          console.error("Failed to save translation");
+        }
+      } catch (error) {
+        console.error("Error saving translation:", error);
+      }
     },
-    [selection],
+    [selection, paper.id],
   );
 
   // Handle translation toggle (show/hide inline translation)
-  const handleTranslationToggle = useCallback((translationId: string) => {
-    setInlineTranslations((prev) =>
-      prev.map((t) =>
-        t.id === translationId ? { ...t, isActive: !t.isActive } : t,
-      ),
-    );
-  }, []);
+  const handleTranslationToggle = useCallback(
+    async (translationId: string) => {
+      // Find current state
+      const translation = inlineTranslations.find(
+        (t) => t.id === translationId,
+      );
+      if (!translation) return;
+
+      const newIsActive = !translation.isActive;
+
+      // Optimistic update
+      setInlineTranslations((prev) =>
+        prev.map((t) =>
+          t.id === translationId ? { ...t, isActive: newIsActive } : t,
+        ),
+      );
+
+      // Persist to database
+      try {
+        await fetch(`/api/translations?id=${translationId}`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ isActive: newIsActive }),
+        });
+      } catch (error) {
+        console.error("Error updating translation:", error);
+        // Revert on error
+        setInlineTranslations((prev) =>
+          prev.map((t) =>
+            t.id === translationId ? { ...t, isActive: !newIsActive } : t,
+          ),
+        );
+      }
+    },
+    [inlineTranslations],
+  );
 
   // Handle highlight click - navigate to the highlight in the PDF
   const handleHighlightClick = useCallback((highlight: Highlight) => {
@@ -470,6 +598,7 @@ export function PaperReader({ paper, pdfUrl }: PaperReaderProps) {
                 textContent: p.text_content,
               }))}
               onCitationClick={handleCitationClick}
+              onSaveCitation={handleSaveCitation}
               highlightContext={highlightContext}
               onHighlightContextClear={() => setHighlightContext(null)}
             />

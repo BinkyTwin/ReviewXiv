@@ -19,6 +19,7 @@ interface ChatPanelProps {
   paperId: string;
   pages: Array<{ pageNumber: number; textContent: string }>;
   onCitationClick?: (citation: Citation) => void;
+  onSaveCitation?: (citation: Citation) => void;
   highlightContext?: { page: number; text: string } | null;
   onHighlightContextClear?: () => void;
 }
@@ -27,6 +28,7 @@ export function ChatPanel({
   paperId,
   pages,
   onCitationClick,
+  onSaveCitation,
   highlightContext,
   onHighlightContextClear,
 }: ChatPanelProps) {
@@ -151,6 +153,7 @@ export function ChatPanel({
                 content={message.content}
                 citations={message.citations}
                 onCitationClick={onCitationClick}
+                onSaveCitation={onSaveCitation}
               />
             ))
           )}

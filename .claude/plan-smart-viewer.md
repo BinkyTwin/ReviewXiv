@@ -1,8 +1,8 @@
 # Plan: Smart PDF Viewer - Niveau Alphaxiv
 
-> Date: 2025-12-27
+> Date: 2025-12-28
 > Branch: feature/smart-pdf-viewer
-> Status: EN COURS - Phase 1-2 ✅ | Phase 3 🟡 | Phase 4-5 ⏳
+> Status: EN COURS - Phase 1-3 ✅ | Phase 3.1-3.2 ✅ | Phase 4-5 ⏳
 
 ## Inspiration: Alphaxiv
 
@@ -17,6 +17,17 @@
 ---
 
 ## Problemes Actuels Identifies
+
+### 0. Rendu OCR Markdown Catastrophique (CRITIQUE)
+
+**Symptomes**:
+- Artefacts `[object Object]` dans les titres et listes (ex: `[object Object], COMPETENCES`)
+- Mise en page linearisee (perte des colonnes et espacements PDF)
+- Typographie uniforme (pas de preservation de bold/italic/tailles)
+
+**Cause Probable**:
+- OCR Mistral renvoie un markdown "structurel" sans coordonnees de texte
+- Le rendu HTML/Mardown ne dispose d'aucune info de layout (bbox/positions)
 
 ### 1. Le Surlignage Ne Fonctionne Pas (CRITIQUE)
 
@@ -53,6 +64,38 @@
 
 ---
 
+## Contraintes OCR & Capacites Connues
+
+### Mistral OCR 3 (etat actuel)
+- Sortie principale: **markdown** (avec tables en HTML) + images extraites
+- Pas de **bounding boxes texte** exposes dans l'API actuelle (donc pas de layout fidelisable)
+- Ideal pour **contenu sémantique** (recherche, RAG, traduction), pas pour rendu "pixel-perfect"
+
+### Alternatives OCR avec layout (pour hybride)
+- **Google Document AI**: expose `Layout` avec `boundingPoly` + `textAnchor` (bons bboxes pour overlay texte)
+- **Tesseract (hOCR)**: permet une couche texte positionnee (hOCR/TSV) avec bboxes (moins precis, mais local)
+
+> Decision: utiliser Mistral pour le **texte propre + tables**, et un OCR "bbox" pour **l'overlay de selection**.
+Evidence
+
+  - Mistral OCR 3 “is designed to extract text and embedded images” et “supports markdown
+    output enriched with HTML-based table reconstruction”, avec “HTML table tags with colspan/
+    rowspan” pour préserver la structure (Mistral OCR 3 news).
+  - La doc Mistral OCR mentionne l’extraction de “interleaved text and images” (Mistral docs).
+  - Google Document AI définit un Layout avec textAnchor et boundingPoly, utile pour des bboxes
+    (GCP Document AI).
+  - Tesseract peut produire un PDF “searchable text layer” et un output hOCR (Tesseract docs).
+
+  Sources
+
+  - Introducing Mistral OCR 3 — Mistral AI — https://mistral.ai/fr/news/mistral-ocr-3
+  - OCR 3 — Mistral Docs — https://docs.mistral.ai/models/ocr-3-25-12
+  - Document AI API: Document — Google Cloud — https://cloud.google.com/document-ai/docs/
+    reference/rest/v1/Document
+  - Tesseract Command Line Usage — tesseract-ocr — https://tesseract-ocr.github.io/tessdoc/
+    Command-Line-Usage.html
+---
+
 ## Architecture Proposee
 
 ### Structure des Couches (Z-Index)
@@ -66,6 +109,19 @@
 +10  TextLayer             Selection de texte
  0   CanvasLayer           Rendu PDF
 ```
+
+### Pipeline Hybride (NOUVEAU)
+
+```
+PDF.js Canvas (source de verite visuelle)
+   + TextLayer (PDF.js text items si has_text=true)
+   + OCRTextLayer (bbox OCR si page scannee)
+   + Highlight/Translation/Annotation layers
+Mistral OCR (texte propre + tables) -> recherche/traduction
+```
+
+**Objectif**: conserver **typo + layout** du PDF (via canvas) tout en gardant
+une selection fiable et une traduction inline.
 
 ### Hierarchie des Composants
 
@@ -175,6 +231,12 @@ Option B: **Approche hybride** (Recommandee)
 - Utiliser Mistral OCR uniquement pour les PDFs scannes
 - Rendre avec des TextBlocks positionnes (pas markdown brut)
 
+Option C: **Hybride + OCR bbox (Recommandee v2.1)**
+- Canvas PDF.js comme rendu principal (layout/typo fidelise)
+- TextLayer PDF.js pour pages avec texte
+- OCR bbox (Tesseract hOCR ou DocAI) pour pages scannees
+- Mistral OCR pour texte propre (traduction / chat / RAG)
+
 ---
 
 ## Solution: Traduction Inline
@@ -214,6 +276,11 @@ APRES (Apply Inline):
 - Bouton toggle: 24px, subtil, apparait au hover
 - Border: aucune (seamless avec la page)
 - Transition: 150ms fade entre les etats
+
+### Preservation Style (NOUVEAU)
+- Detecter les styles du texte selectionne (bold/italic/size)
+- Appliquer ces styles a la traduction inline
+- Mapping simple: `font-weight`, `font-style`, `font-size`, `letter-spacing`
 
 ### Modele de Donnees
 
@@ -385,14 +452,33 @@ ALTER TABLE inline_translations ENABLE ROW LEVEL SECURITY;
 2. [x] Ajouter les raccourcis clavier (H, T, A, C, Esc, 1-5)
 3. [x] Ameliorer le calcul des offsets de selection
 
-### Phase 3: Traduction Inline 🟡
+### Phase 3: Traduction Inline ✅
 
-**Duree estimee**: 2 jours | **Status**: PARTIEL
+**Duree estimee**: 2 jours | **Status**: COMPLETE
 
 1. [x] Creer composant `InlineTranslationOverlay` (TranslationLayer)
-2. [ ] Ajouter stockage des traductions (Supabase)
+2. [x] Ajouter stockage des traductions (Supabase)
 3. [x] Implementer fonctionnalite toggle
-4. [ ] Creer migration Supabase
+4. [x] Creer migration Supabase (`inline_translations` table)
+
+### Phase 3.1: Pipeline Hybride "Canvas First" (NOUVEAU - CRITIQUE) ✅
+
+**Status**: COMPLETE
+
+1. [x] Rendre les pages avec PDF.js canvas comme source visuelle (CanvasLayer)
+2. [x] TextLayer PDF.js pour pages `has_text=true` (PDFTextLayer)
+3. [x] Hook usePDFDocument pour charger PDF.js et extraire les TextItems
+4. [x] API /api/pdf-text pour extraction serveur avec positions
+5. [x] Prop renderMode ("markdown", "canvas", "hybrid") dans SmartPDFViewer
+6. [ ] OCRTextLayer (bbox) pour pages scannees (optionnel, future v2.1)
+
+### Phase 3.2: Nettoyage OCR Markdown (Quick Fix) ✅
+
+**Status**: COMPLETE
+
+1. [x] Supprimer les artefacts `[object Object]` (patterns multiples)
+2. [x] Respecter les dimensions page OCR (pas de A4 fixe)
+3. [x] Regles de typographie pour listes/entetes (espacement, ponctuation)
 
 ### Phase 4: Systeme d'Annotations
 
@@ -454,6 +540,15 @@ ALTER TABLE inline_translations ENABLE ROW LEVEL SECURITY;
 | Rendu avec TextBlocks positionnes | - |
 
 **Recommandation**: Option C avec refactoring progressif.
+
+---
+
+## Gadget: Capture de Zone (idee)
+
+**Concept**: outil "rectangle" pour selectionner une zone visuelle du PDF
+- Utilisable pour images/figures plus tard
+- Peut servir a creer un "highlight visuel" ou extraire une image
+- Pas prioritaire pour l'instant
 
 ---
 

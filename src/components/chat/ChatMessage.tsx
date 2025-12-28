@@ -1,5 +1,6 @@
 "use client";
 
+import { Highlighter } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { Citation } from "@/types/citation";
 
@@ -8,6 +9,7 @@ interface ChatMessageProps {
   content: string;
   citations?: Citation[];
   onCitationClick?: (citation: Citation) => void;
+  onSaveCitation?: (citation: Citation) => void;
 }
 
 export function ChatMessage({
@@ -15,6 +17,7 @@ export function ChatMessage({
   content,
   citations,
   onCitationClick,
+  onSaveCitation,
 }: ChatMessageProps) {
   const isUser = role === "user";
 
@@ -35,14 +38,25 @@ export function ChatMessage({
             <p className="text-xs text-muted-foreground mb-1">Sources:</p>
             <div className="flex flex-wrap gap-1">
               {citations.map((citation, index) => (
-                <button
-                  key={index}
-                  onClick={() => onCitationClick?.(citation)}
-                  className="inline-flex items-center px-2 py-0.5 rounded text-xs bg-primary/20 text-primary hover:bg-primary/30 transition-colors"
-                  title={citation.quote}
-                >
-                  Page {citation.page}
-                </button>
+                <div key={index} className="flex items-center gap-1">
+                  <button
+                    onClick={() => onCitationClick?.(citation)}
+                    className="inline-flex items-center px-2 py-0.5 rounded text-xs bg-primary/20 text-primary hover:bg-primary/30 transition-colors"
+                    title={citation.quote}
+                  >
+                    Page {citation.page}
+                  </button>
+                  {onSaveCitation && (
+                    <button
+                      onClick={() => onSaveCitation(citation)}
+                      className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs bg-muted text-muted-foreground hover:bg-muted/80 hover:text-foreground transition-colors"
+                      title="Sauvegarder comme highlight"
+                    >
+                      <Highlighter className="h-3 w-3" />
+                      Sauvegarder
+                    </button>
+                  )}
+                </div>
               ))}
             </div>
           </div>
