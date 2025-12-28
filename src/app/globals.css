@@ -48,6 +48,7 @@
     --highlight-blue: 207 90% 54%;
     --highlight-red: 4 90% 58%;
     --highlight-orange: 36 100% 50%;
+    --highlight-purple: 280 65% 60%;
   }
 }
 
@@ -55,6 +56,7 @@
   * {
     @apply border-border;
   }
+
   body {
     @apply bg-background text-foreground antialiased;
   }
@@ -65,16 +67,204 @@
   .highlight-yellow {
     background-color: hsl(var(--highlight-yellow) / 0.35);
   }
+
   .highlight-green {
     background-color: hsl(var(--highlight-green) / 0.35);
   }
+
   .highlight-blue {
     background-color: hsl(var(--highlight-blue) / 0.35);
   }
+
   .highlight-red {
     background-color: hsl(var(--highlight-red) / 0.35);
   }
+
   .highlight-orange {
     background-color: hsl(var(--highlight-orange) / 0.35);
   }
+
+  .highlight-purple {
+    background-color: hsl(var(--highlight-purple) / 0.35);
+  }
+
+  .citation-flash {
+    animation: citation-flash 2.4s ease-out both;
+    transform-origin: center;
+    will-change: opacity, transform, box-shadow;
+  }
+}
+
+/* Animations */
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes gradient-shift {
+
+  0%,
+  100% {
+    background-position: 0% 50%;
+  }
+
+  50% {
+    background-position: 100% 50%;
+  }
+}
+
+@keyframes pulse-glow {
+
+  0%,
+  100% {
+    box-shadow: 0 0 20px hsl(var(--primary) / 0.4);
+  }
+
+  50% {
+    box-shadow: 0 0 40px hsl(var(--primary) / 0.6);
+  }
+}
+
+@keyframes citation-flash {
+  0% {
+    opacity: 0;
+    transform: scale(0.98);
+    box-shadow: 0 0 0 0 hsl(var(--highlight-orange) / 0);
+  }
+
+  20% {
+    opacity: 1;
+    transform: scale(1);
+    box-shadow:
+      0 0 0 1px hsl(var(--highlight-orange) / 0.6),
+      0 0 12px hsl(var(--highlight-orange) / 0.45);
+  }
+
+  60% {
+    opacity: 0.85;
+    transform: scale(1.01);
+    box-shadow:
+      0 0 0 1px hsl(var(--highlight-orange) / 0.4),
+      0 0 18px hsl(var(--highlight-orange) / 0.5);
+  }
+
+  100% {
+    opacity: 0;
+    transform: scale(1.015);
+    box-shadow: 0 0 0 0 hsl(var(--highlight-orange) / 0);
+  }
+}
+
+@keyframes float {
+
+  0%,
+  100% {
+    transform: translateY(0px);
+  }
+
+  50% {
+    transform: translateY(-10px);
+  }
+}
+
+/* Animation utilities */
+@layer utilities {
+  .animate-fadeInUp {
+    animation: fadeInUp 0.6s ease-out forwards;
+  }
+
+  .animate-gradient {
+    background-size: 200% 200%;
+    animation: gradient-shift 3s ease infinite;
+  }
+
+  .animate-pulse-glow {
+    animation: pulse-glow 2s ease-in-out infinite;
+  }
+
+  .animate-float {
+    animation: float 6s ease-in-out infinite;
+  }
+
+  .animation-delay-100 {
+    animation-delay: 0.1s;
+  }
+
+  .animation-delay-200 {
+    animation-delay: 0.2s;
+  }
+
+  .animation-delay-300 {
+    animation-delay: 0.3s;
+  }
+
+  .animation-delay-400 {
+    animation-delay: 0.4s;
+  }
+
+  .animation-delay-500 {
+    animation-delay: 0.5s;
+  }
+
+  .fill-forwards {
+    animation-fill-mode: forwards;
+  }
+
+  /* Glassmorphism */
+  .glass {
+    background: hsl(var(--card) / 0.6);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid hsl(var(--border) / 0.5);
+  }
+
+  .glass-hover {
+    transition: all 0.3s ease;
+  }
+
+  .glass-hover:hover {
+    background: hsl(var(--card) / 0.8);
+    border-color: hsl(var(--primary) / 0.3);
+    transform: translateY(-4px);
+    box-shadow: 0 20px 40px -10px hsl(var(--primary) / 0.2);
+  }
+
+  /* Gradient text */
+  .gradient-text {
+    background: linear-gradient(135deg, hsl(var(--primary)), hsl(25 100% 65%), hsl(var(--primary)));
+    background-size: 200% 200%;
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    animation: gradient-shift 3s ease infinite;
+  }
+
+  /* Glow effects */
+  .glow-primary {
+    box-shadow: 0 0 30px -5px hsl(var(--primary) / 0.4);
+  }
+
+  .text-glow {
+    text-shadow: 0 0 30px hsl(var(--primary) / 0.5);
+  }
+}
+
+/* Background pattern */
+.bg-grid-pattern {
+  background-image:
+    linear-gradient(hsl(var(--border) / 0.1) 1px, transparent 1px),
+    linear-gradient(90deg, hsl(var(--border) / 0.1) 1px, transparent 1px);
+  background-size: 40px 40px;
+}
+
+/* Radial gradient overlay */
+.bg-radial-gradient {
+  background: radial-gradient(ellipse at top, hsl(var(--primary) / 0.08) 0%, transparent 50%);
 }

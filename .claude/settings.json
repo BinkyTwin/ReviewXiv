@@ -30,7 +30,8 @@
       "Bash(git push:*)",
       "Bash(npx prettier:*)",
       "Bash(ls:*)",
-      "Bash(cd:*)"
+      "Bash(cd:*)",
+      "Bash(mkdir:*)"
     ]
   }
 }

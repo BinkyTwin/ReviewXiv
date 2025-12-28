@@ -46,3 +46,8 @@ out/
 
 # Next.js
 next-env.d.ts
+
+# Local docs (not tracked)
+cdc.md
+claude_configuration.md
+TODO.md
