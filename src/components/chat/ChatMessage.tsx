@@ -1,6 +1,9 @@
 "use client";
 
 import { Highlighter } from "lucide-react";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
+import rehypeRaw from "rehype-raw";
 import { cn } from "@/lib/utils";
 import type { Citation } from "@/types/citation";
 
@@ -44,7 +47,11 @@ export function ChatMessage({
             />
           </div>
         )}
-        <p className="text-sm whitespace-pre-wrap">{content}</p>
+        <div className="text-sm prose prose-sm dark:prose-invert max-w-none prose-p:my-1 prose-ul:my-1 prose-ol:my-1 prose-li:my-0 prose-headings:my-2">
+          <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeRaw]}>
+            {content}
+          </ReactMarkdown>
+        </div>
 
         {citations && citations.length > 0 && (
           <div className="mt-3 pt-2 border-t border-border/50">
