@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useMemo, useEffect, useCallback, useRef } from "react";
-import { useSearchParams } from "next/navigation";
+import { useSearchParams, useRouter } from "next/navigation";
 import dynamic from "next/dynamic";
 import { ChatPanel } from "@/components/chat/ChatPanel";
 import { SelectionPopover } from "@/components/pdf/SelectionPopover";
@@ -14,7 +14,10 @@ import { HighlightsPanel } from "@/components/highlights";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ResizeHandle } from "@/components/ui/resize-handle";
-import { MessageSquare, FileText } from "lucide-react";
+import { MessageSquare, FileText, ChevronLeft, Layout } from "lucide-react";
+import { ModeToggle } from "@/components/mode-toggle";
+import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 import { offsetsToRects } from "@/lib/highlight-renderer";
 import type { PaperWithPages } from "@/types/paper";
 import type { Citation } from "@/types/citation";
@@ -91,6 +94,7 @@ interface PaperReaderProps {
 }
 
 export function PaperReader({ paper, pdfUrl }: PaperReaderProps) {
+  const router = useRouter();
   // Viewer selection: default to PDFHighlighterViewer (v3)
   const searchParams = useSearchParams();
   const viewerMode = searchParams.get("viewer");
@@ -603,12 +607,24 @@ export function PaperReader({ paper, pdfUrl }: PaperReaderProps) {
   }, []);
 
   return (
-    <div ref={containerRef} className="h-screen flex bg-background">
+    <div ref={containerRef} className="h-screen flex bg-background overflow-hidden selection:bg-primary/10 transition-colors duration-500">
       {/* PDF Viewer - resizable */}
       <div
-        className="h-full border-r border-border relative"
+        className="h-full border-r border-border relative bg-muted/20"
         style={{ width: `${pdfWidthPercent}%` }}
       >
+        {/* PDF Top Bar */}
+        <div className="absolute top-4 left-4 z-20 flex items-center gap-2">
+           <Button 
+            variant="outline" 
+            size="icon" 
+            onClick={() => router.push('/library')}
+            className="rounded-full bg-background/80 backdrop-blur-md border-border/50 apple-shadow hover:scale-105 transition-all"
+           >
+             <ChevronLeft className="h-4 w-4" />
+           </Button>
+        </div>
+
         {useHighlighterViewer ? (
           <PDFHighlighterViewer
             pdfUrl={pdfUrl}
@@ -701,19 +717,27 @@ export function PaperReader({ paper, pdfUrl }: PaperReaderProps) {
 
       {/* Right Panel - resizable */}
       <div
-        className="h-full flex flex-col min-h-0 overflow-hidden"
+        className="h-full flex flex-col min-h-0 overflow-hidden bg-card/30 backdrop-blur-sm"
         style={{ width: `${100 - pdfWidthPercent}%` }}
       >
-        <div className="p-3 border-b border-border bg-card">
-          <h1
-            className="font-semibold text-foreground truncate"
-            title={paper.title}
-          >
-            {paper.title}
-          </h1>
-          <p className="text-xs text-muted-foreground">
-            {paper.page_count} pages | Page {currentPage}
-          </p>
+        {/* Apple-style Header */}
+        <div className="p-4 px-6 flex items-center justify-between border-b border-border/50 bg-background/50">
+          <div className="flex flex-col min-w-0">
+            <h1
+              className="text-[13px] font-bold text-foreground truncate max-w-[200px]"
+              title={paper.title}
+            >
+              {paper.title}
+            </h1>
+            <div className="flex items-center gap-2 text-[11px] text-muted-foreground font-medium uppercase tracking-wider">
+              <span>{paper.page_count} pages</span>
+              <span className="opacity-30">•</span>
+              <span>Page {currentPage}</span>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <ModeToggle />
+          </div>
         </div>
 
         <Tabs
@@ -721,22 +745,24 @@ export function PaperReader({ paper, pdfUrl }: PaperReaderProps) {
           onValueChange={(v) => setActiveTab(v as "chat" | "notes")}
           className="flex-1 flex flex-col min-h-0 overflow-hidden"
         >
-          <TabsList className="grid w-full grid-cols-2 rounded-none border-b border-border bg-card">
-            <TabsTrigger
-              value="chat"
-              className="rounded-none data-[state=active]:bg-background"
-            >
-              <MessageSquare className="h-4 w-4 mr-2" />
-              Chat
-            </TabsTrigger>
-            <TabsTrigger
-              value="notes"
-              className="rounded-none data-[state=active]:bg-background"
-            >
-              <FileText className="h-4 w-4 mr-2" />
-              Notes
-            </TabsTrigger>
-          </TabsList>
+          <div className="px-6 py-2 bg-background/50 border-b border-border/50">
+            <TabsList className="h-9 w-full grid grid-cols-2 bg-muted/50 p-1 rounded-xl">
+              <TabsTrigger
+                value="chat"
+                className="rounded-lg text-xs font-semibold data-[state=active]:bg-background data-[state=active]:apple-shadow transition-all"
+              >
+                <MessageSquare className="h-3.5 w-3.5 mr-2" />
+                Assistant
+              </TabsTrigger>
+              <TabsTrigger
+                value="notes"
+                className="rounded-lg text-xs font-semibold data-[state=active]:bg-background data-[state=active]:apple-shadow transition-all"
+              >
+                <FileText className="h-3.5 w-3.5 mr-2" />
+                Highlights
+              </TabsTrigger>
+            </TabsList>
+          </div>
 
           <TabsContent
             value="chat"
@@ -761,12 +787,10 @@ export function PaperReader({ paper, pdfUrl }: PaperReaderProps) {
             value="notes"
             className="flex-1 m-0 overflow-hidden flex flex-col"
           >
-            {/* Notes section - takes available space */}
             <div className="flex-1 overflow-hidden">
               <NotesPanel paperId={paper.id} currentPage={currentPage} />
             </div>
 
-            {/* Highlights section - fixed at bottom */}
             <HighlightsPanel
               highlights={highlights}
               paperId={paper.id}

@@ -121,88 +121,106 @@ export function PaperUploader({
   };
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-6">
       <div
         {...getRootProps()}
         className={cn(
-          "relative border-2 border-dashed rounded-lg p-8 text-center cursor-pointer transition-colors",
+          "relative border-2 border-dashed rounded-3xl p-12 text-center cursor-pointer transition-all duration-300",
           isDragActive
-            ? "border-primary bg-primary/5"
-            : "border-border hover:border-primary/50",
-          file && "border-primary bg-primary/5",
+            ? "border-primary bg-primary/5 scale-[1.02]"
+            : "border-border/50 hover:border-primary/30 hover:bg-muted/30",
+          file && "border-primary/50 bg-primary/5 shadow-inner",
           isUploading && "pointer-events-none opacity-50",
         )}
       >
         <input {...getInputProps()} />
 
         {file ? (
-          <div className="flex items-center justify-center gap-2 text-foreground">
-            <FileText className="h-6 w-6 text-primary" />
-            <span className="font-medium">{file.name}</span>
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                clearFile();
-              }}
-              className="p-1 hover:bg-muted rounded"
-              disabled={isUploading}
-            >
-              <X className="h-4 w-4 text-muted-foreground" />
-            </button>
+          <div className="flex flex-col items-center gap-4 animate-in">
+            <div className="h-16 w-16 rounded-2xl bg-primary/10 flex items-center justify-center apple-shadow">
+              <FileText className="h-8 w-8 text-primary" />
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="font-bold text-foreground text-sm truncate max-w-[200px]">{file.name}</span>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  clearFile();
+                }}
+                className="h-6 w-6 rounded-full bg-muted flex items-center justify-center hover:bg-destructive hover:text-white transition-colors"
+                disabled={isUploading}
+              >
+                <X className="h-3 w-3" />
+              </button>
+            </div>
+            <p className="text-[11px] text-muted-foreground font-bold uppercase tracking-widest">
+              Fichier prêt à l'import
+            </p>
           </div>
         ) : (
-          <div className="space-y-2">
-            <Upload className="h-10 w-10 mx-auto text-muted-foreground" />
-            <p className="text-muted-foreground">
-              {isDragActive
-                ? "Drop the PDF here"
-                : "Drag & drop a PDF or click to browse"}
-            </p>
-            <p className="text-xs text-muted-foreground">PDF files only</p>
+          <div className="space-y-4">
+            <div className="h-16 w-16 rounded-3xl bg-muted/50 flex items-center justify-center mx-auto apple-shadow group-hover:scale-110 transition-transform">
+              <Upload className="h-8 w-8 text-muted-foreground/50" />
+            </div>
+            <div>
+              <p className="text-sm font-bold text-foreground">
+                {isDragActive
+                  ? "Déposez le PDF ici"
+                  : "Glissez-déposez un PDF"}
+              </p>
+              <p className="text-xs text-muted-foreground mt-1 font-medium">
+                Ou cliquez pour parcourir vos fichiers
+              </p>
+            </div>
           </div>
         )}
       </div>
 
-      <div className="space-y-2">
-        <label className="text-sm text-muted-foreground">
-          Optional: arXiv URL
+      <div className="space-y-2 px-1">
+        <label className="text-[11px] font-bold text-muted-foreground uppercase tracking-widest ml-1">
+          Lien arXiv (Optionnel)
         </label>
         <Input
-          placeholder="https://arxiv.org/abs/2301.00001"
+          placeholder="https://arxiv.org/abs/..."
           value={arxivUrl}
           onChange={(e) => setArxivUrl(e.target.value)}
           disabled={isUploading}
+          className="rounded-2xl h-12 bg-muted/50 border-border/50 focus-visible:ring-primary/20"
         />
       </div>
 
       {error && (
-        <div className="p-3 rounded-lg bg-destructive/10 border border-destructive/20">
-          <p className="text-destructive text-sm">{error}</p>
+        <div className="p-4 rounded-2xl bg-destructive/10 border border-destructive/20 animate-in">
+          <p className="text-destructive text-xs font-medium">{error}</p>
         </div>
       )}
 
       {progress && (
-        <div className="flex items-center gap-2 text-muted-foreground">
-          <Loader2 className="h-4 w-4 animate-spin" />
-          <span className="text-sm">{progress}</span>
+        <div className="flex flex-col items-center gap-3 animate-in">
+          <div className="flex items-center gap-2 text-primary">
+            <Loader2 className="h-4 w-4 animate-spin" />
+            <span className="text-xs font-bold uppercase tracking-widest">{progress}</span>
+          </div>
+          <div className="w-full h-1.5 bg-muted rounded-full overflow-hidden">
+            <div className="h-full bg-primary animate-progress-glow w-1/2" />
+          </div>
         </div>
       )}
 
       <Button
         onClick={handleSubmit}
         disabled={!file || isUploading}
-        className="w-full"
-        size="lg"
+        className="w-full rounded-full py-7 h-auto font-bold text-lg apple-shadow bg-primary text-primary-foreground hover:scale-[1.01] transition-all"
       >
         {isUploading ? (
           <>
-            <Loader2 className="h-4 w-4 animate-spin mr-2" />
-            Processing...
+            <Loader2 className="h-5 w-5 animate-spin mr-3" />
+            Analyse en cours...
           </>
         ) : (
           <>
-            <Upload className="h-4 w-4 mr-2" />
-            Upload Paper
+            <Upload className="h-5 w-5 mr-3" />
+            Importer le Document
           </>
         )}
       </Button>

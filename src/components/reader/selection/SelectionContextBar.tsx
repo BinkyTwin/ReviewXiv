@@ -200,10 +200,9 @@ export function SelectionContextBar({
     <div
       ref={barRef}
       className={cn(
-        "fixed z-[60] flex items-center gap-1.5 p-1.5",
-        "bg-card/95 border border-border/80 rounded-xl shadow-2xl",
-        "backdrop-blur",
-        "transition-all duration-150 ease-out",
+        "fixed z-[60] flex items-center gap-1 p-1.5",
+        "apple-blur border border-border/50 rounded-2xl apple-shadow",
+        "transition-all duration-200 ease-out",
         isVisible
           ? "opacity-100 scale-100 translate-y-0"
           : "opacity-0 scale-95 translate-y-2",
@@ -224,25 +223,22 @@ export function SelectionContextBar({
             variant="ghost"
             size="sm"
             className={cn(
-              "gap-1.5 hover:bg-muted",
-              compact ? "h-8 w-8 p-0" : "h-8 px-2",
+              "gap-1.5 hover:bg-muted/50 rounded-xl",
+              compact ? "h-9 w-9 p-0" : "h-9 px-3",
             )}
             title="Surligner (H)"
           >
             <Highlighter className="h-4 w-4" />
             {!compact && (
               <>
-                <span className="text-xs">Surligner</span>
-                <span className="rounded bg-muted px-1 text-[10px] text-muted-foreground">
-                  H
-                </span>
-                <ChevronDown className="h-3 w-3 opacity-50" />
+                <span className="text-[13px] font-semibold">Surligner</span>
+                <ChevronDown className="h-3 w-3 opacity-30" />
               </>
             )}
           </Button>
         </DropdownMenuTrigger>
-        <DropdownMenuContent align="center" className="min-w-0 p-2">
-          <div className="flex gap-1.5">
+        <DropdownMenuContent align="center" className="min-w-0 p-3 rounded-2xl apple-blur apple-shadow border-border/50">
+          <div className="flex gap-2">
             {HIGHLIGHT_COLORS.map(({ color, label, cssVar, key }) => (
               <button
                 key={color}
@@ -251,64 +247,34 @@ export function SelectionContextBar({
                   onClose();
                 }}
                 className={cn(
-                  "w-7 h-7 rounded-md transition-all",
-                  "hover:ring-2 hover:ring-offset-2 hover:ring-foreground/20",
+                  "w-8 h-8 rounded-full transition-all border border-black/5 dark:border-white/10",
+                  "hover:scale-110 active:scale-95",
                   "focus:ring-2 focus:ring-offset-2 focus:ring-primary",
                   "relative group",
                 )}
                 style={{
-                  backgroundColor: `hsl(var(${cssVar}) / 0.9)`,
+                  backgroundColor: `hsl(var(${cssVar}))`,
                 }}
                 title={`${label} (${key})`}
               >
-                <span className="absolute -bottom-5 left-1/2 -translate-x-1/2 text-[10px] text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity">
+                <span className="absolute -bottom-6 left-1/2 -translate-x-1/2 text-[10px] font-bold text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity">
                   {key}
                 </span>
               </button>
             ))}
           </div>
-          <p className="text-[10px] text-muted-foreground text-center mt-3">
-            Appuyez sur 1-5 pour choisir
-          </p>
         </DropdownMenuContent>
       </DropdownMenu>
 
-      <div className="w-px h-5 bg-border mx-0.5" />
-
-      {/* Comment button */}
-      {onComment && (
-        <Button
-          variant="ghost"
-          size="sm"
-          className={cn(
-            "gap-1.5 hover:bg-muted",
-            compact ? "h-8 w-8 p-0" : "h-8 px-2",
-          )}
-          onClick={() => {
-            onComment();
-            onClose();
-          }}
-          title="Commenter (C)"
-        >
-          <MessageCircle className="h-4 w-4" />
-          {!compact && (
-            <>
-              <span className="text-xs">Commenter</span>
-              <span className="rounded bg-muted px-1 text-[10px] text-muted-foreground">
-                C
-              </span>
-            </>
-          )}
-        </Button>
-      )}
+      <div className="w-px h-4 bg-border/50 mx-1" />
 
       {/* Translate button */}
       <Button
         variant="ghost"
         size="sm"
         className={cn(
-          "gap-1.5 hover:bg-muted",
-          compact ? "h-8 w-8 p-0" : "h-8 px-2",
+          "gap-2 hover:bg-muted/50 rounded-xl",
+          compact ? "h-9 w-9 p-0" : "h-9 px-3",
         )}
         onClick={() => {
           onTranslate();
@@ -317,14 +283,7 @@ export function SelectionContextBar({
         title="Traduire (T)"
       >
         <Languages className="h-4 w-4" />
-        {!compact && (
-          <>
-            <span className="text-xs">Traduire</span>
-            <span className="rounded bg-muted px-1 text-[10px] text-muted-foreground">
-              T
-            </span>
-          </>
-        )}
+        {!compact && <span className="text-[13px] font-semibold">Traduire</span>}
       </Button>
 
       {/* Ask AI button */}
@@ -332,8 +291,8 @@ export function SelectionContextBar({
         variant="ghost"
         size="sm"
         className={cn(
-          "gap-1.5 hover:bg-muted",
-          compact ? "h-8 w-8 p-0" : "h-8 px-2",
+          "gap-2 hover:bg-muted/50 rounded-xl",
+          compact ? "h-9 w-9 p-0" : "h-9 px-3",
         )}
         onClick={() => {
           onAsk();
@@ -341,24 +300,17 @@ export function SelectionContextBar({
         }}
         title="Demander a l'IA (A)"
       >
-        <MessageSquare className="h-4 w-4" />
-        {!compact && (
-          <>
-            <span className="text-xs">Demander</span>
-            <span className="rounded bg-muted px-1 text-[10px] text-muted-foreground">
-              A
-            </span>
-          </>
-        )}
+        <MessageCircle className="h-4 w-4" />
+        {!compact && <span className="text-[13px] font-semibold">Demander</span>}
       </Button>
 
-      <div className="w-px h-5 bg-border mx-0.5" />
+      <div className="w-px h-4 bg-border/50 mx-1" />
 
       {/* Copy button */}
       <Button
         variant="ghost"
         size="sm"
-        className="h-8 w-8 p-0 hover:bg-muted"
+        className="h-9 w-9 p-0 hover:bg-muted/50 rounded-xl"
         onClick={handleCopy}
         title="Copier (Cmd+C)"
       >
@@ -369,7 +321,7 @@ export function SelectionContextBar({
       <Button
         variant="ghost"
         size="sm"
-        className="h-8 w-8 p-0 hover:bg-muted text-muted-foreground"
+        className="h-9 w-9 p-0 hover:bg-muted/50 rounded-xl text-muted-foreground/50 hover:text-foreground"
         onClick={onClose}
         title="Fermer (Esc)"
       >

@@ -5,7 +5,8 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { ChatMessage } from "./ChatMessage";
-import { Send, Loader2, MessageSquare } from "lucide-react";
+import { ArrowUp, Loader2, MessageSquare, Bot, X } from "lucide-react";
+import { cn } from "@/lib/utils";
 import type { Citation } from "@/types/citation";
 
 interface Message {
@@ -185,14 +186,33 @@ export function ChatPanel({
   };
 
   return (
-    <div className="flex flex-col h-full w-full bg-background min-h-0 overflow-hidden">
+    <div className="flex flex-col h-full w-full bg-background min-h-0 overflow-hidden relative">
+      {/* Header */}
+      <div className="px-6 py-4 border-b border-border/50 flex items-center justify-between apple-blur sticky top-0 z-10">
+        <div className="flex items-center gap-2">
+          <MessageSquare className="h-4 w-4 text-muted-foreground" />
+          <h2 className="text-sm font-semibold">Assistant de Recherche</h2>
+        </div>
+        {isLoading && (
+          <div className="flex items-center gap-2 text-muted-foreground animate-pulse">
+            <Loader2 className="h-3 w-3 animate-spin" />
+            <span className="text-[11px] font-medium uppercase tracking-wider">Analyse...</span>
+          </div>
+        )}
+      </div>
+
       {/* Messages */}
-      <ScrollArea className="flex-1 p-4 min-h-0">
-        <div className="space-y-4">
+      <ScrollArea className="flex-1 px-6 min-h-0">
+        <div className="py-8 space-y-2">
           {messages.length === 0 ? (
-            <div className="flex items-center gap-3 py-4 text-muted-foreground">
-              <MessageSquare className="h-5 w-5 opacity-50 flex-shrink-0" />
-              <p className="text-sm">Posez une question sur ce paper.</p>
+            <div className="flex flex-col items-center justify-center py-20 text-center animate-in">
+              <div className="h-16 w-16 rounded-3xl bg-muted/50 flex items-center justify-center mb-4 apple-shadow">
+                <Bot className="h-8 w-8 text-muted-foreground/50" />
+              </div>
+              <h3 className="text-sm font-medium mb-1">Comment puis-je vous aider ?</h3>
+              <p className="text-xs text-muted-foreground max-w-[200px]">
+                Posez n'importe quelle question sur ce document scientifique.
+              </p>
             </div>
           ) : (
             messages.map((message) => (
@@ -208,64 +228,71 @@ export function ChatPanel({
             ))
           )}
 
-          {isLoading && (
-            <div className="flex items-center gap-2 text-muted-foreground">
-              <Loader2 className="h-4 w-4 animate-spin" />
-              <span className="text-sm">Réflexion en cours...</span>
+          {error && (
+            <div className="p-3 rounded-xl bg-destructive/10 border border-destructive/20 text-destructive text-xs animate-in">
+              {error}
             </div>
           )}
 
-          {error && <p className="text-xs text-destructive">{error}</p>}
-
-          <div ref={scrollRef} />
+          <div ref={scrollRef} className="h-4" />
         </div>
       </ScrollArea>
 
       {/* Input */}
-      <div className="p-4 border-t border-border">
-        {/* Pending image preview */}
-        {pendingImage && (
-          <div className="mb-2 relative inline-block">
-            <img
-              src={pendingImage}
-              alt="Pending image"
-              className="max-h-[80px] rounded border border-border"
+      <div className="p-6 bg-gradient-to-t from-background via-background/90 to-transparent">
+        <div className="relative group apple-shadow apple-blur rounded-[24px] border border-border/50 focus-within:border-primary/30 transition-all duration-300">
+          {/* Pending image preview */}
+          {pendingImage && (
+            <div className="px-4 pt-4 relative animate-in">
+              <div className="relative inline-block group/img">
+                <img
+                  src={pendingImage}
+                  alt="Pending"
+                  className="max-h-[100px] rounded-xl border border-border/50 apple-shadow object-contain"
+                />
+                <button
+                  onClick={() => setPendingImage(null)}
+                  className="absolute -top-2 -right-2 w-6 h-6 bg-destructive text-white rounded-full flex items-center justify-center text-xs shadow-lg hover:scale-110 transition-transform"
+                >
+                  <X className="h-3 w-3" />
+                </button>
+              </div>
+            </div>
+          )}
+          
+          <div className="flex items-end gap-2 p-2">
+            <Textarea
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              onKeyDown={handleKeyDown}
+              placeholder={
+                pendingImage
+                  ? "Que voulez-vous savoir sur cette image ?"
+                  : "Posez une question..."
+              }
+              className="min-h-[48px] max-h-[160px] resize-none border-0 focus-visible:ring-0 bg-transparent text-sm py-3 px-3 scrollbar-none"
+              disabled={isLoading}
             />
-            <button
-              onClick={() => setPendingImage(null)}
-              className="absolute -top-2 -right-2 w-5 h-5 bg-destructive text-destructive-foreground rounded-full flex items-center justify-center text-xs hover:bg-destructive/80"
-              title="Remove image"
+            <Button
+              onClick={sendMessage}
+              disabled={!input.trim() || isLoading}
+              size="icon"
+              className={cn(
+                "h-10 w-10 shrink-0 rounded-2xl transition-all duration-300 apple-shadow",
+                input.trim() ? "bg-primary scale-100" : "bg-muted scale-95 opacity-50"
+              )}
             >
-              ×
-            </button>
+              {isLoading ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <ArrowUp className="h-4 w-4" />
+              )}
+            </Button>
           </div>
-        )}
-        <div className="flex gap-2">
-          <Textarea
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={handleKeyDown}
-            placeholder={
-              pendingImage
-                ? "Posez une question sur cette image..."
-                : "Posez une question sur ce paper..."
-            }
-            className="min-h-[60px] max-h-[120px] resize-none"
-            disabled={isLoading}
-          />
-          <Button
-            onClick={sendMessage}
-            disabled={!input.trim() || isLoading}
-            size="icon"
-            className="h-[60px] w-[60px]"
-          >
-            {isLoading ? (
-              <Loader2 className="h-5 w-5 animate-spin" />
-            ) : (
-              <Send className="h-5 w-5" />
-            )}
-          </Button>
         </div>
+        <p className="text-[10px] text-center text-muted-foreground mt-3 uppercase tracking-widest font-medium opacity-50">
+          DeepRead AI Assistant
+        </p>
       </div>
     </div>
   );

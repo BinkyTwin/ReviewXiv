@@ -17,22 +17,22 @@ function StatusBadge({ status }: { status: Paper["status"] }) {
         ready: {
             icon: CheckCircle,
             label: "Prêt",
-            className: "text-emerald-400 bg-emerald-400/5 border-emerald-400/10",
+            className: "text-emerald-500 bg-emerald-500/10 border-emerald-500/20",
         },
         processing: {
             icon: Loader2,
-            label: "En cours",
-            className: "text-amber-400 bg-amber-400/5 border-amber-400/10",
+            label: "Analyse",
+            className: "text-amber-500 bg-amber-500/10 border-amber-500/20",
         },
         error: {
             icon: AlertCircle,
             label: "Erreur",
-            className: "text-rose-400 bg-rose-400/5 border-rose-400/10",
+            className: "text-rose-500 bg-rose-500/10 border-rose-500/20",
         },
         ocr_needed: {
             icon: FileText,
             label: "OCR requis",
-            className: "text-blue-400 bg-blue-400/5 border-blue-400/10",
+            className: "text-blue-500 bg-blue-500/10 border-blue-500/20",
         },
     };
 
@@ -40,7 +40,7 @@ function StatusBadge({ status }: { status: Paper["status"] }) {
 
     return (
         <span
-            className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[10px] font-medium uppercase tracking-wider border ${className}`}
+            className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[9px] font-bold uppercase tracking-wider border ${className}`}
         >
             <Icon className={`h-2.5 w-2.5 ${status === "processing" ? "animate-spin" : ""}`} />
             {label}
@@ -57,24 +57,23 @@ export function DocumentRow({ paper }: { paper: Paper }) {
         year: "numeric",
     });
 
-    const authors = paper.authors?.join(", ") || "—";
+    const authors = paper.authors?.join(", ") || "Chercheurs non spécifiés";
     const truncatedAuthors =
-        authors.length > 40 ? `${authors.slice(0, 40)}...` : authors;
+        authors.length > 50 ? `${authors.slice(0, 50)}...` : authors;
 
     const handleDelete = async (e: React.MouseEvent) => {
         e.preventDefault();
         e.stopPropagation();
 
-        if (confirm("Êtes-vous sûr de vouloir supprimer ce document ? Cette action est irréversible.")) {
+        if (confirm("Êtes-vous sûr de vouloir supprimer ce document ?")) {
             setIsDeleting(true);
             try {
                 const result = await deletePaper(paper.id, paper.storage_path);
                 if (!result.success) {
-                    alert("Erreur lors de la suppression : " + result.error);
+                    alert("Erreur : " + result.error);
                 }
             } catch (error) {
                 console.error("Delete error:", error);
-                alert("Une erreur inattendue est survenue.");
             } finally {
                 setIsDeleting(false);
             }
@@ -82,17 +81,17 @@ export function DocumentRow({ paper }: { paper: Paper }) {
     };
 
     return (
-        <div className="group/row relative">
+        <div className="group/row relative animate-in">
             <Link href={`/paper/${paper.id}`} className="block">
-                <div className={`grid grid-cols-12 gap-4 items-center px-8 py-5 border-b border-white/5 transition-all duration-300 group-hover:bg-white/[0.03] group-hover:px-10 ${isDeleting ? "opacity-50 grayscale pointer-events-none" : ""}`}>
+                <div className={`grid grid-cols-12 gap-4 items-center px-8 py-6 transition-all duration-300 group-hover:bg-muted/50 ${isDeleting ? "opacity-50 grayscale pointer-events-none" : ""}`}>
                     {/* Title & Authors */}
                     <div className="col-span-12 md:col-span-5 min-w-0">
-                        <h3 className="text-base font-medium text-white/90 truncate group-hover:text-primary transition-colors">
-                            {paper.title || "Sans titre"}
+                        <h3 className="text-base font-bold text-foreground truncate group-hover:text-primary transition-colors">
+                            {paper.title || "Document sans titre"}
                         </h3>
-                        <div className="flex items-center gap-3 mt-1.5">
-                            <p className="text-xs text-white/40 truncate flex items-center gap-1.5">
-                                <Users className="h-3 w-3" />
+                        <div className="flex items-center gap-3 mt-1">
+                            <p className="text-xs text-muted-foreground font-medium truncate flex items-center gap-1.5">
+                                <Users className="h-3 w-3 opacity-60" />
                                 {truncatedAuthors}
                             </p>
                         </div>
@@ -105,30 +104,32 @@ export function DocumentRow({ paper }: { paper: Paper }) {
 
                     {/* Pages */}
                     <div className="hidden md:block col-span-1 text-center">
-                        <span className="text-xs text-white/40 tabular-nums">{paper.page_count}p</span>
+                        <span className="text-xs font-bold text-muted-foreground tabular-nums bg-muted px-2 py-1 rounded-lg border border-border/50">
+                            {paper.page_count}p
+                        </span>
                     </div>
 
                     {/* Date */}
                     <div className="hidden md:block col-span-2">
-                        <span className="text-xs text-white/40 flex items-center gap-1.5">
+                        <span className="text-xs text-muted-foreground font-medium flex items-center gap-1.5">
                             <Calendar className="h-3 w-3 opacity-50" />
                             {formattedDate}
                         </span>
                     </div>
 
                     {/* Tags */}
-                    <div className="hidden md:block col-span-2 flex flex-wrap gap-1.5 pr-10">
+                    <div className="hidden md:block col-span-2 flex flex-wrap gap-1.5 pr-12">
                         {paper.tags && paper.tags.length > 0 ? (
                             paper.tags.slice(0, 2).map((tag) => (
                                 <span
                                     key={tag}
-                                    className="inline-flex items-center px-2 py-0.5 rounded text-[10px] bg-white/5 text-white/60 border border-white/10"
+                                    className="inline-flex items-center px-2 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wider bg-secondary text-secondary-foreground border border-border/50"
                                 >
                                     {tag}
                                 </span>
                             ))
                         ) : (
-                            <span className="text-xs text-white/20">—</span>
+                            <span className="text-xs text-muted-foreground/30">—</span>
                         )}
                     </div>
                 </div>
@@ -138,7 +139,7 @@ export function DocumentRow({ paper }: { paper: Paper }) {
             <button
                 onClick={handleDelete}
                 disabled={isDeleting}
-                className="absolute right-6 top-1/2 -translate-y-1/2 p-2 rounded-full bg-rose-500/10 text-rose-500 opacity-0 group-hover/row:opacity-100 transition-all hover:bg-rose-500 hover:text-white disabled:opacity-50"
+                className="absolute right-6 top-1/2 -translate-y-1/2 h-10 w-10 rounded-full bg-destructive/10 text-destructive opacity-0 group-hover/row:opacity-100 transition-all hover:bg-destructive hover:text-destructive-foreground disabled:opacity-50 flex items-center justify-center apple-shadow active:scale-90"
                 title="Supprimer le document"
             >
                 {isDeleting ? (

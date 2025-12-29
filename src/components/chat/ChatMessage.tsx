@@ -1,6 +1,6 @@
 "use client";
 
-import { Highlighter } from "lucide-react";
+import { Highlighter, User, Bot } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import rehypeRaw from "rehype-raw";
@@ -28,59 +28,70 @@ export function ChatMessage({
   const isUser = role === "user";
 
   return (
-    <div className={cn("flex gap-3", isUser ? "justify-end" : "justify-start")}>
-      <div
-        className={cn(
-          "max-w-[85%] rounded-lg px-4 py-3",
-          isUser
-            ? "bg-primary text-primary-foreground"
-            : "bg-card border border-border",
-        )}
-      >
-        {/* Image preview for user messages */}
-        {imageData && isUser && (
-          <div className="mb-2 rounded overflow-hidden bg-black/10">
-            <img
-              src={imageData}
-              alt="Attached image"
-              className="max-w-full max-h-[200px] object-contain"
-            />
-          </div>
-        )}
-        <div className="text-sm prose prose-sm dark:prose-invert max-w-none prose-p:my-1 prose-ul:my-1 prose-ol:my-1 prose-li:my-0 prose-headings:my-2 prose-p:text-foreground prose-li:text-foreground prose-strong:text-foreground prose-headings:text-foreground">
-          <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeRaw]}>
-            {content}
-          </ReactMarkdown>
+    <div className={cn("flex w-full mb-6 animate-in", isUser ? "justify-end" : "justify-start")}>
+      <div className={cn("flex gap-3 max-w-[90%]", isUser ? "flex-row-reverse" : "flex-row")}>
+        <div className={cn(
+          "h-8 w-8 rounded-full flex items-center justify-center shrink-0",
+          isUser ? "bg-primary text-primary-foreground shadow-sm" : "bg-muted text-muted-foreground"
+        )}>
+          {isUser ? <User className="h-4 w-4" /> : <Bot className="h-4 w-4" />}
         </div>
+        
+        <div className="flex flex-col gap-2">
+          <div
+            className={cn(
+              "rounded-2xl px-4 py-2.5 shadow-sm transition-all",
+              isUser
+                ? "bg-primary text-primary-foreground rounded-tr-none"
+                : "bg-card border border-border/50 rounded-tl-none apple-shadow",
+            )}
+          >
+            {/* Image preview for user messages */}
+            {imageData && isUser && (
+              <div className="mb-2 rounded-lg overflow-hidden border border-white/20">
+                <img
+                  src={imageData}
+                  alt="Attached image"
+                  className="max-w-full max-h-[240px] object-contain"
+                />
+              </div>
+            )}
+            
+            <div className={cn(
+              "text-[14.5px] leading-relaxed prose prose-sm max-w-none",
+              isUser ? "prose-invert" : "dark:prose-invert",
+              "prose-p:my-1 prose-pre:bg-muted/50 prose-pre:border prose-pre:border-border/50"
+            )}>
+              <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeRaw]}>
+                {content}
+              </ReactMarkdown>
+            </div>
+          </div>
 
-        {citations && citations.length > 0 && (
-          <div className="mt-3 pt-2 border-t border-border/50">
-            <p className="text-xs text-muted-foreground mb-1">Sources:</p>
-            <div className="flex flex-wrap gap-1">
+          {citations && citations.length > 0 && (
+            <div className="flex flex-wrap gap-2 mt-1">
               {citations.map((citation, index) => (
-                <div key={index} className="flex items-center gap-1">
+                <div key={index} className="flex items-center gap-1.5 animate-in">
                   <button
                     onClick={() => onCitationClick?.(citation)}
-                    className="inline-flex items-center px-2 py-0.5 rounded text-xs bg-primary/20 text-primary hover:bg-primary/30 transition-colors"
-                    title={citation.quote}
+                    className="inline-flex items-center px-2.5 py-1 rounded-full text-[11px] font-medium bg-secondary text-secondary-foreground hover:bg-secondary/80 border border-border/50 transition-all apple-shadow active:scale-95"
                   >
-                    Page {citation.page}
+                    Source p. {citation.page}
                   </button>
                   {onSaveCitation && (
                     <button
                       onClick={() => onSaveCitation(citation)}
-                      className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs bg-muted text-muted-foreground hover:bg-muted/80 hover:text-foreground transition-colors"
-                      title="Sauvegarder comme highlight"
+                      className="inline-flex items-center p-1 rounded-full bg-secondary text-secondary-foreground hover:bg-secondary/80 border border-border/50 transition-all active:scale-95"
+                      title="Enregistrer comme note"
                     >
                       <Highlighter className="h-3 w-3" />
-                      Sauvegarder
                     </button>
                   )}
                 </div>
               ))}
             </div>
-          </div>
-        )}
+          )}
+        </div>
       </div>
     </div>
   );
