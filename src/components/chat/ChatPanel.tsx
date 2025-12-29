@@ -14,15 +14,14 @@ interface Message {
   role: "user" | "assistant";
   content: string;
   citations?: Citation[];
+  citationsStatus?: "unavailable";
   /** Base64 image data URL for user messages with images */
   imageData?: string;
 }
 
-interface ChatResponse {
+interface CitationsResponse {
   error?: string;
-  content?: string;
   citations?: Citation[];
-  conversationId?: string;
 }
 
 interface ChatPanelProps {
@@ -89,6 +88,7 @@ export function ChatPanel({
     if (!input.trim() || isLoading) return;
 
     const currentImage = pendingImage;
+    const highlightSnapshot = highlightContext || undefined;
 
     const userMessage: Message = {
       id: crypto.randomUUID(),
@@ -112,7 +112,7 @@ export function ChatPanel({
           conversationId,
           message: userMessage.content,
           pages,
-          highlightContext: highlightContext || undefined,
+          highlightContext: highlightSnapshot,
           imageData: currentImage || undefined,
         }),
       });
@@ -120,45 +120,102 @@ export function ChatPanel({
       // Clear highlight context after sending
       onHighlightContextClear?.();
 
-      const responseText = await response.text();
-      let data: ChatResponse;
-
-      try {
-        data = responseText ? JSON.parse(responseText) : {};
-      } catch {
-        data = {};
-      }
-
       if (!response.ok) {
-        throw new Error(
-          data.error ||
-            (responseText
-              ? `Failed to send message: ${responseText}`
-              : "Failed to send message"),
-        );
-      }
-
-      if (!data.content) {
+        const responseText = await response.text();
         throw new Error(
           responseText
-            ? `Invalid chat response: ${responseText}`
-            : "Invalid chat response",
+            ? `Failed to send message: ${responseText}`
+            : "Failed to send message",
         );
       }
 
       // Update conversation ID
-      if (data.conversationId && !conversationId) {
-        setConversationId(data.conversationId);
+      const nextConversationId = response.headers.get("x-conversation-id");
+      if (nextConversationId && !conversationId) {
+        setConversationId(nextConversationId);
       }
 
+      const assistantId = crypto.randomUUID();
       const assistantMessage: Message = {
-        id: crypto.randomUUID(),
+        id: assistantId,
         role: "assistant",
-        content: data.content,
-        citations: data.citations,
+        content: "",
       };
 
       setMessages((prev) => [...prev, assistantMessage]);
+      let fullText = "";
+
+      if (!response.body) {
+        fullText = await response.text();
+        setMessages((prev) =>
+          prev.map((message) =>
+            message.id === assistantId
+              ? { ...message, content: fullText }
+              : message,
+          ),
+        );
+      } else {
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+
+        while (true) {
+          const { value, done } = await reader.read();
+          if (done) break;
+
+          fullText += decoder.decode(value, { stream: true });
+          setMessages((prev) =>
+            prev.map((message) =>
+              message.id === assistantId
+                ? { ...message, content: fullText }
+                : message,
+            ),
+          );
+        }
+      }
+
+      setIsLoading(false);
+
+      try {
+        const citationsResponse = await fetch("/api/chat/citations", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            answerText: fullText,
+            pages,
+            highlightContext: highlightSnapshot,
+          }),
+        });
+
+        const citationsText = await citationsResponse.text();
+        let citationsData: CitationsResponse;
+
+        try {
+          citationsData = citationsText ? JSON.parse(citationsText) : {};
+        } catch {
+          citationsData = {};
+        }
+
+        if (!citationsResponse.ok) {
+          throw new Error(citationsData.error || "Citation extraction failed");
+        }
+
+        setMessages((prev) =>
+          prev.map((message) =>
+            message.id === assistantId
+              ? { ...message, citations: citationsData.citations || [] }
+              : message,
+          ),
+        );
+      } catch (citationsError) {
+        console.error("Citation extraction failed:", citationsError);
+        setMessages((prev) =>
+          prev.map((message) =>
+            message.id === assistantId
+              ? { ...message, citationsStatus: "unavailable" }
+              : message,
+          ),
+        );
+      }
     } catch (err) {
       const message =
         err instanceof Error ? err.message : "Failed to send message";
@@ -221,6 +278,7 @@ export function ChatPanel({
                 role={message.role}
                 content={message.content}
                 citations={message.citations}
+                citationsStatus={message.citationsStatus}
                 imageData={message.imageData}
                 onCitationClick={onCitationClick}
                 onSaveCitation={onSaveCitation}

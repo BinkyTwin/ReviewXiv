@@ -11,6 +11,7 @@ interface ChatMessageProps {
   role: "user" | "assistant";
   content: string;
   citations?: Citation[];
+  citationsStatus?: "unavailable";
   onCitationClick?: (citation: Citation) => void;
   onSaveCitation?: (citation: Citation) => void;
   /** Image attached to user message (base64 data URL) */
@@ -21,6 +22,7 @@ export function ChatMessage({
   role,
   content,
   citations,
+  citationsStatus,
   onCitationClick,
   onSaveCitation,
   imageData,
@@ -89,6 +91,12 @@ export function ChatMessage({
                   )}
                 </div>
               ))}
+            </div>
+          )}
+
+          {citationsStatus === "unavailable" && (
+            <div className="text-[11px] text-muted-foreground mt-1">
+              Sources indisponibles
             </div>
           )}
         </div>
