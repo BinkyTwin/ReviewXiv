@@ -47,7 +47,7 @@ export function ChatMessage({
             />
           </div>
         )}
-        <div className="text-sm prose prose-sm dark:prose-invert max-w-none prose-p:my-1 prose-ul:my-1 prose-ol:my-1 prose-li:my-0 prose-headings:my-2">
+        <div className="text-sm prose prose-sm dark:prose-invert max-w-none prose-p:my-1 prose-ul:my-1 prose-ol:my-1 prose-li:my-0 prose-headings:my-2 prose-p:text-foreground prose-li:text-foreground prose-strong:text-foreground prose-headings:text-foreground">
           <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeRaw]}>
             {content}
           </ReactMarkdown>
