@@ -188,7 +188,7 @@ export function ChatPanel({
   return (
     <div className="flex flex-col h-full w-full bg-background min-h-0 overflow-hidden relative">
       {/* Header */}
-      <div className="px-6 py-4 border-b border-border/50 flex items-center justify-between apple-blur sticky top-0 z-10">
+      <div className="px-4 md:px-6 py-3 md:py-4 border-b border-border/50 flex items-center justify-between apple-blur sticky top-0 z-10">
         <div className="flex items-center gap-2">
           <MessageSquare className="h-4 w-4 text-muted-foreground" />
           <h2 className="text-sm font-semibold">Assistant de Recherche</h2>
@@ -202,7 +202,7 @@ export function ChatPanel({
       </div>
 
       {/* Messages */}
-      <ScrollArea className="flex-1 px-6 min-h-0">
+      <ScrollArea className="flex-1 px-4 md:px-6 min-h-0">
         <div className="py-8 space-y-2">
           {messages.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-20 text-center animate-in">
@@ -239,7 +239,7 @@ export function ChatPanel({
       </ScrollArea>
 
       {/* Input */}
-      <div className="p-6 bg-gradient-to-t from-background via-background/90 to-transparent">
+      <div className="p-4 md:p-6 bg-gradient-to-t from-background via-background/90 to-transparent">
         <div className="relative group apple-shadow apple-blur rounded-[24px] border border-border/50 focus-within:border-primary/30 transition-all duration-300">
           {/* Pending image preview */}
           {pendingImage && (

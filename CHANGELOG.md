@@ -6,6 +6,7 @@ This file tracks main tasks completed by AI agents. Only significant changes are
 
 ## 2025-12-29
 
+FIX: Improve mobile reader layout by stacking PDF and assistant panels
 FIX: Enable Markdown and HTML rendering in chat messages (ReactMarkdown with rehype-raw)
 REFACTOR: Improve chat system prompt with better structure, examples, and guidelines
 

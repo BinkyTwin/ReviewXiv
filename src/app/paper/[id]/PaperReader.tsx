@@ -606,18 +606,25 @@ export function PaperReader({ paper, pdfUrl }: PaperReaderProps) {
     localStorage.setItem("deepread-pdf-width", "70");
   }, []);
 
+  const layoutStyle = {
+    "--pdf-width": `${pdfWidthPercent}%`,
+  } as React.CSSProperties;
+
   return (
-    <div ref={containerRef} className="h-screen flex bg-background overflow-hidden selection:bg-primary/10 transition-colors duration-500">
+    <div
+      ref={containerRef}
+      className="h-screen flex flex-col md:flex-row bg-background overflow-hidden selection:bg-primary/10 transition-colors duration-500"
+      style={layoutStyle}
+    >
       {/* PDF Viewer - resizable */}
       <div
-        className="h-full border-r border-border relative bg-muted/20"
-        style={{ width: `${pdfWidthPercent}%` }}
+        className="h-[55vh] md:h-full w-full md:w-[var(--pdf-width)] border-b md:border-b-0 md:border-r border-border relative bg-muted/20"
       >
         {/* PDF Top Bar */}
-        <div className="absolute top-4 left-4 z-20 flex items-center gap-2">
-           <Button 
-            variant="outline" 
-            size="icon" 
+        <div className="absolute top-3 left-3 md:top-4 md:left-4 z-20 flex items-center gap-2">
+           <Button
+            variant="outline"
+            size="icon"
             onClick={() => router.push('/library')}
             className="rounded-full bg-background/80 backdrop-blur-md border-border/50 apple-shadow hover:scale-105 transition-all"
            >
@@ -713,15 +720,15 @@ export function PaperReader({ paper, pdfUrl }: PaperReaderProps) {
         onResize={handleResize}
         onResizeEnd={handleResizeEnd}
         onReset={handleResizeReset}
+        className="hidden md:block"
       />
 
       {/* Right Panel - resizable */}
       <div
-        className="h-full flex flex-col min-h-0 overflow-hidden bg-card/30 backdrop-blur-sm"
-        style={{ width: `${100 - pdfWidthPercent}%` }}
+        className="h-[45vh] md:h-full w-full md:w-[calc(100%-var(--pdf-width))] flex flex-col min-h-0 overflow-hidden bg-card/30 backdrop-blur-sm border-t md:border-t-0 border-border/50"
       >
         {/* Apple-style Header */}
-        <div className="p-4 px-6 flex items-center justify-between border-b border-border/50 bg-background/50">
+        <div className="p-4 px-4 md:px-6 flex items-center justify-between border-b border-border/50 bg-background/50">
           <div className="flex flex-col min-w-0">
             <h1
               className="text-[13px] font-bold text-foreground truncate max-w-[200px]"
@@ -745,7 +752,7 @@ export function PaperReader({ paper, pdfUrl }: PaperReaderProps) {
           onValueChange={(v) => setActiveTab(v as "chat" | "notes")}
           className="flex-1 flex flex-col min-h-0 overflow-hidden"
         >
-          <div className="px-6 py-2 bg-background/50 border-b border-border/50">
+          <div className="px-4 md:px-6 py-2 bg-background/50 border-b border-border/50">
             <TabsList className="h-9 w-full grid grid-cols-2 bg-muted/50 p-1 rounded-xl">
               <TabsTrigger
                 value="chat"
