@@ -59,15 +59,17 @@ export default async function LibraryPage() {
                 {/* Header */}
                 <div className="max-w-7xl mx-auto mb-16">
                     <div className="flex flex-col md:flex-row md:items-end justify-between gap-6">
-                        <div className="space-y-6">
-                            <div className="flex items-center gap-4">
-                                <Link href="/">
-                                    <Button variant="outline" size="icon" className="rounded-full h-10 w-10 border-border/50 bg-background/50 backdrop-blur-md apple-shadow hover:scale-105 transition-all">
-                                        <ArrowLeft className="h-4 w-4" />
-                                    </Button>
-                                </Link>
-                                <div className="h-10 w-10 rounded-xl bg-primary flex items-center justify-center shadow-lg">
-                                    <Zap className="h-5 w-5 text-primary-foreground" />
+                        <div className="space-y-6 flex-1">
+                            <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-4">
+                                    <Link href="/">
+                                        <Button variant="outline" size="icon" className="rounded-full h-10 w-10 border-border/50 bg-background/50 backdrop-blur-md apple-shadow hover:scale-105 transition-all">
+                                            <ArrowLeft className="h-4 w-4" />
+                                        </Button>
+                                    </Link>
+                                    <div className="h-10 w-10 rounded-xl bg-primary flex items-center justify-center shadow-lg">
+                                        <Zap className="h-5 w-5 text-primary-foreground" />
+                                    </div>
                                 </div>
                                 <ModeToggle />
                             </div>

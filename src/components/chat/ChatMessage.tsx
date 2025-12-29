@@ -43,7 +43,7 @@ export function ChatMessage({
               "rounded-2xl px-4 py-2.5 shadow-sm transition-all",
               isUser
                 ? "bg-primary text-primary-foreground rounded-tr-none"
-                : "bg-card border border-border/50 rounded-tl-none apple-shadow",
+                : "bg-muted/50 text-foreground border border-border/50 rounded-tl-none apple-shadow",
             )}
           >
             {/* Image preview for user messages */}
@@ -59,7 +59,7 @@ export function ChatMessage({
             
             <div className={cn(
               "text-[14.5px] leading-relaxed prose prose-sm max-w-none",
-              isUser ? "prose-invert" : "dark:prose-invert",
+              isUser ? "prose-invert" : "dark:prose-invert text-foreground",
               "prose-p:my-1 prose-pre:bg-muted/50 prose-pre:border prose-pre:border-border/50"
             )}>
               <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeRaw]}>
