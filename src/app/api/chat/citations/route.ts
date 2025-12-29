@@ -68,12 +68,16 @@ export async function POST(request: NextRequest) {
     const llmData = await llmResponse.json();
     const rawContent = llmData.choices?.[0]?.message?.content || "";
 
-    let parsedResponse: CitedResponse;
+    let parsedResponse: CitedResponse = { answer: "", citations: [] };
     try {
       parsedResponse = JSON.parse(rawContent);
     } catch {
-      const extractedJson = extractJsonFromMarkdown(rawContent);
-      parsedResponse = JSON.parse(extractedJson);
+      try {
+        const extractedJson = extractJsonFromMarkdown(rawContent);
+        parsedResponse = JSON.parse(extractedJson);
+      } catch (parseError) {
+        console.warn("Citation extraction parse failed:", parseError);
+      }
     }
 
     const validatedCitations = validateCitations(

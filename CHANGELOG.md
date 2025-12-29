@@ -6,6 +6,7 @@ This file tracks main tasks completed by AI agents. Only significant changes are
 
 ## 2025-12-29
 
+FIX: Handle citation extraction parse failures by returning empty citations
 FEATURE: Stream chat responses and extract citations via dedicated endpoint
 FEATURE: Add citation extraction prompt with lightweight model selection
 
