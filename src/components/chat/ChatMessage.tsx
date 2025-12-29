@@ -11,6 +11,7 @@ interface ChatMessageProps {
   role: "user" | "assistant";
   content: string;
   citations?: Citation[];
+  citationsStatus?: "unavailable";
   onCitationClick?: (citation: Citation) => void;
   onSaveCitation?: (citation: Citation) => void;
   /** Image attached to user message (base64 data URL) */
@@ -21,6 +22,7 @@ export function ChatMessage({
   role,
   content,
   citations,
+  citationsStatus,
   onCitationClick,
   onSaveCitation,
   imageData,
@@ -57,11 +59,15 @@ export function ChatMessage({
               </div>
             )}
             
-            <div className={cn(
-              "text-[14.5px] leading-relaxed prose prose-sm max-w-none",
-              isUser ? "prose-invert" : "dark:prose-invert text-foreground",
-              "prose-p:my-1 prose-pre:bg-muted/50 prose-pre:border prose-pre:border-border/50"
-            )}>
+            <div
+              className={cn(
+                "text-[14.5px] leading-relaxed prose prose-sm max-w-none",
+                isUser
+                  ? "text-primary-foreground prose-p:text-primary-foreground prose-strong:text-primary-foreground prose-em:text-primary-foreground prose-li:text-primary-foreground prose-a:text-primary-foreground"
+                  : "dark:prose-invert text-foreground",
+                "prose-p:my-1 prose-pre:bg-muted/50 prose-pre:border prose-pre:border-border/50",
+              )}
+            >
               <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeRaw]}>
                 {content}
               </ReactMarkdown>
@@ -89,6 +95,12 @@ export function ChatMessage({
                   )}
                 </div>
               ))}
+            </div>
+          )}
+
+          {citationsStatus === "unavailable" && (
+            <div className="text-[11px] text-muted-foreground mt-1">
+              Sources indisponibles
             </div>
           )}
         </div>

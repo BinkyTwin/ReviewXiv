@@ -1,11 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { validateCitations } from "@/lib/citations/validator";
-import {
-  CITATION_SYSTEM_PROMPT,
-  buildPageContext,
-} from "@/lib/citations/prompts";
-import type { CitedResponse } from "@/types/citation";
+import { buildPageContext, CHAT_SYSTEM_PROMPT } from "@/lib/citations/prompts";
 
 interface ChatRequest {
   paperId: string;
@@ -68,76 +63,6 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Build user message content (with optional image for vision)
-    let userMessageContent: MessageContent = body.message;
-
-    if (body.imageData) {
-      // Format for vision models
-      userMessageContent = [
-        { type: "text", text: body.message },
-        { type: "image_url", image_url: { url: body.imageData } },
-      ];
-    }
-
-    // Call LLM
-    const baseUrl =
-      process.env.NEXT_PUBLIC_APP_URL || new URL(request.url).origin;
-    const llmResponse = await fetch(new URL("/api/llm", baseUrl), {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          messages: [
-            { role: "system", content: CITATION_SYSTEM_PROMPT },
-            {
-              role: "user",
-              content: `CONTEXTE DU PAPER:\n${truncatedContext}`,
-            },
-            ...messageHistory,
-            { role: "user", content: userMessageContent },
-          ],
-          temperature: 0.3,
-          max_tokens: 2048,
-          // Don't force JSON for vision requests as some models may not support it
-          ...(body.imageData
-            ? {}
-            : { response_format: { type: "json_object" } }),
-        }),
-      });
-
-    if (!llmResponse.ok) {
-      const error = await llmResponse.json();
-      throw new Error(error.error || "LLM request failed");
-    }
-
-    const llmData = await llmResponse.json();
-    const rawContent = llmData.choices?.[0]?.message?.content || "";
-
-    // Parse LLM response
-    // For vision requests, LLM may return JSON wrapped in markdown code blocks
-    let parsedResponse: CitedResponse;
-    try {
-      // First try direct JSON parse
-      parsedResponse = JSON.parse(rawContent);
-    } catch {
-      // If direct parse fails, try extracting from markdown code blocks
-      try {
-        const extractedJson = extractJsonFromMarkdown(rawContent);
-        parsedResponse = JSON.parse(extractedJson);
-      } catch {
-        // Final fallback if all parsing fails
-        parsedResponse = {
-          answer: rawContent,
-          citations: [],
-        };
-      }
-    }
-
-    // Validate citations
-    const validatedCitations = validateCitations(
-      parsedResponse.citations || [],
-      body.pages,
-    );
-
     // Create or get conversation
     let conversationId = body.conversationId;
 
@@ -158,29 +83,191 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Save messages to database
+    // Save user message to database
     if (conversationId) {
-      // Save user message
       await supabase.from("messages").insert({
         conversation_id: conversationId,
         role: "user",
         content: body.message,
       });
-
-      // Save assistant message
-      await supabase.from("messages").insert({
-        conversation_id: conversationId,
-        role: "assistant",
-        content: JSON.stringify(parsedResponse),
-        citations: validatedCitations,
-        model_used: process.env.OPENROUTER_MODEL || "openrouter",
-      });
     }
 
-    return NextResponse.json({
-      conversationId,
-      content: parsedResponse.answer,
-      citations: validatedCitations,
+    // Build user message content (with optional image for vision)
+    let userMessageContent: MessageContent = body.message;
+
+    if (body.imageData) {
+      // Format for vision models
+      userMessageContent = [
+        { type: "text", text: body.message },
+        { type: "image_url", image_url: { url: body.imageData } },
+      ];
+    }
+
+    const { data: settings } = await supabase
+      .from("settings")
+      .select("llm_provider, lmstudio_url, openrouter_model")
+      .single();
+
+    const provider = settings?.llm_provider || "openrouter";
+
+    let apiUrl: string;
+    let headers: Record<string, string>;
+    let requestBody: Record<string, unknown>;
+    let modelUsed = provider;
+
+    if (provider === "lmstudio") {
+      const baseUrl = settings?.lmstudio_url || "http://localhost:1234/v1";
+      apiUrl = `${baseUrl}/chat/completions`;
+      headers = {
+        "Content-Type": "application/json",
+      };
+      requestBody = {
+        messages: [
+          { role: "system", content: CHAT_SYSTEM_PROMPT },
+          {
+            role: "user",
+            content: `CONTEXTE DU PAPER:\n${truncatedContext}`,
+          },
+          ...messageHistory,
+          { role: "user", content: userMessageContent },
+        ],
+        temperature: 0.3,
+        max_tokens: 2048,
+        stream: true,
+      };
+    } else {
+      const apiKey = process.env.OPENROUTER_API;
+
+      if (!apiKey) {
+        return NextResponse.json(
+          { error: "OpenRouter API key not configured" },
+          { status: 500 },
+        );
+      }
+
+      apiUrl = "https://openrouter.ai/api/v1/chat/completions";
+      headers = {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${apiKey}`,
+        "HTTP-Referer":
+          process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000",
+        "X-Title": "DeepRead",
+      };
+
+      const model =
+        process.env.OPENROUTER_MODEL ||
+        settings?.openrouter_model ||
+        "nvidia/nemotron-nano-12b-v2-vl:free";
+      modelUsed = model;
+
+      requestBody = {
+        model,
+        messages: [
+          { role: "system", content: CHAT_SYSTEM_PROMPT },
+          {
+            role: "user",
+            content: `CONTEXTE DU PAPER:\n${truncatedContext}`,
+          },
+          ...messageHistory,
+          { role: "user", content: userMessageContent },
+        ],
+        temperature: 0.3,
+        max_tokens: 2048,
+        stream: true,
+      };
+    }
+
+    const llmResponse = await fetch(apiUrl, {
+      method: "POST",
+      headers,
+      body: JSON.stringify(requestBody),
+    });
+
+    if (!llmResponse.ok) {
+      const errorText = await llmResponse.text();
+      throw new Error(errorText || "LLM request failed");
+    }
+
+    if (!llmResponse.body) {
+      throw new Error("LLM response missing stream body");
+    }
+
+    const encoder = new TextEncoder();
+    const decoder = new TextDecoder();
+    let fullText = "";
+
+    const stream = new ReadableStream({
+      async start(controller) {
+        const reader = llmResponse.body!.getReader();
+        let buffer = "";
+        let isClosed = false;
+
+        const closeStream = () => {
+          if (!isClosed) {
+            controller.close();
+            isClosed = true;
+          }
+        };
+
+        try {
+          while (true) {
+            const { value, done } = await reader.read();
+            if (done) break;
+
+            buffer += decoder.decode(value, { stream: true });
+            const lines = buffer.split("\n");
+            buffer = lines.pop() ?? "";
+
+            for (const line of lines) {
+              const trimmed = line.trim();
+              if (!trimmed.startsWith("data:")) continue;
+
+              const data = trimmed.replace(/^data:\s*/, "");
+              if (data === "[DONE]") {
+                closeStream();
+                break;
+              }
+
+              try {
+                const parsed = JSON.parse(data);
+                const delta =
+                  parsed.choices?.[0]?.delta?.content ??
+                  parsed.choices?.[0]?.message?.content ??
+                  "";
+                if (delta) {
+                  fullText += delta;
+                  controller.enqueue(encoder.encode(delta));
+                }
+              } catch (parseError) {
+                console.error("Streaming parse error:", parseError);
+              }
+            }
+          }
+        } finally {
+          closeStream();
+          if (conversationId) {
+            await supabase.from("messages").insert({
+              conversation_id: conversationId,
+              role: "assistant",
+              content: fullText.trim(),
+              model_used: modelUsed,
+            });
+          }
+        }
+      },
+    });
+
+    const responseHeaders = new Headers({
+      "Content-Type": "text/plain; charset=utf-8",
+    });
+
+    if (conversationId) {
+      responseHeaders.set("x-conversation-id", conversationId);
+    }
+
+    return new NextResponse(stream, {
+      status: 200,
+      headers: responseHeaders,
     });
   } catch (error) {
     console.error("Chat error:", error);
@@ -207,15 +294,3 @@ function extractAnswerFromContent(content: string): string {
  * Extract JSON from markdown code blocks or return the content as-is
  * Handles responses like: ```json\n{...}\n``` or ```\n{...}\n```
  */
-function extractJsonFromMarkdown(content: string): string {
-  // Try to extract JSON from markdown code blocks
-  const jsonBlockRegex = /```(?:json)?\s*\n?([\s\S]*?)\n?```/;
-  const match = content.match(jsonBlockRegex);
-
-  if (match) {
-    return match[1].trim();
-  }
-
-  // If no code block found, return trimmed content
-  return content.trim();
-}
