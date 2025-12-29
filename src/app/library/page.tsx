@@ -4,8 +4,8 @@ import {
     FileText,
     ArrowLeft,
     BookOpen,
-    Zap,
 } from "lucide-react";
+import { Logo } from "@/components/Logo";
 import { Button } from "@/components/ui/button";
 import { ModeToggle } from "@/components/mode-toggle";
 import type { Paper } from "@/types/paper";
@@ -66,12 +66,9 @@ export default async function LibraryPage() {
                                         <Button variant="outline" size="icon" className="rounded-full h-10 w-10 border-border/50 bg-background/50 backdrop-blur-md apple-shadow hover:scale-105 transition-all">
                                             <ArrowLeft className="h-4 w-4" />
                                         </Button>
-                                    </Link>
-                                    <div className="h-10 w-10 rounded-xl bg-primary flex items-center justify-center shadow-lg">
-                                        <Zap className="h-5 w-5 text-primary-foreground" />
-                                    </div>
-                                </div>
-                                <ModeToggle />
+                                                                            </Link>
+                                                                            <Logo width={40} height={40} className="rounded-xl shadow-lg" />
+                                                                        </div>                                <ModeToggle />
                             </div>
                             <div>
                                 <h1 className="text-4xl md:text-5xl font-bold tracking-tight mb-3">

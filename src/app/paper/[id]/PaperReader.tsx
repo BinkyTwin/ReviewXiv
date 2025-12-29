@@ -11,6 +11,7 @@ import type { InlineTranslation } from "@/components/reader/layers";
 import { TranslationModal } from "@/components/pdf/TranslationModal";
 import { NotesPanel } from "@/components/notes/NotesPanel";
 import { HighlightsPanel } from "@/components/highlights";
+import { Logo } from "@/components/Logo";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ResizeHandle } from "@/components/ui/resize-handle";
@@ -722,17 +723,20 @@ export function PaperReader({ paper, pdfUrl }: PaperReaderProps) {
       >
         {/* Apple-style Header */}
         <div className="p-4 px-6 flex items-center justify-between border-b border-border/50 bg-background/50">
-          <div className="flex flex-col min-w-0">
-            <h1
-              className="text-[13px] font-bold text-foreground truncate max-w-[200px]"
-              title={paper.title}
-            >
-              {paper.title}
-            </h1>
-            <div className="flex items-center gap-2 text-[11px] text-muted-foreground font-medium uppercase tracking-wider">
-              <span>{paper.page_count} pages</span>
-              <span className="opacity-30">•</span>
-              <span>Page {currentPage}</span>
+          <div className="flex items-center gap-3 min-w-0">
+            <Logo width={24} height={24} className="rounded-lg shadow-sm shrink-0" />
+            <div className="flex flex-col min-w-0">
+              <h1
+                className="text-[13px] font-bold text-foreground truncate max-w-[200px]"
+                title={paper.title}
+              >
+                {paper.title}
+              </h1>
+              <div className="flex items-center gap-2 text-[11px] text-muted-foreground font-medium uppercase tracking-wider">
+                <span>{paper.page_count} pages</span>
+                <span className="opacity-30">•</span>
+                <span>Page {currentPage}</span>
+              </div>
             </div>
           </div>
           <div className="flex items-center gap-2">

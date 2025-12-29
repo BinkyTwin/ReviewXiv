@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { PaperUploader } from "@/components/upload/PaperUploader";
 import { ModeToggle } from "@/components/mode-toggle";
+import { Logo } from "@/components/Logo";
 import {
   FileText,
   MessageSquare,
@@ -12,7 +13,6 @@ import {
   Upload,
   BookOpen,
   Sparkles,
-  Zap,
   ChevronRight
 } from "lucide-react";
 
@@ -52,9 +52,7 @@ export default function Home() {
 
       <header className="fixed top-0 left-0 right-0 z-50 p-6 flex justify-between items-center max-w-7xl mx-auto">
         <div className="flex items-center gap-2">
-          <div className="h-8 w-8 rounded-xl bg-primary flex items-center justify-center shadow-lg">
-            <Zap className="h-4 w-4 text-primary-foreground" />
-          </div>
+          <Logo width={32} height={32} className="rounded-xl shadow-lg" />
           <span className="font-bold tracking-tight text-xl">DeepRead</span>
         </div>
         <ModeToggle />
@@ -149,7 +147,7 @@ export default function Home() {
           <div className="h-px w-12 bg-border/50" />
           <div className="flex items-center gap-6 text-[10px] font-bold uppercase tracking-[0.2em]">
             <span className="flex items-center gap-2 tracking-widest leading-none">
-              <Zap className="h-3 w-3" /> Powered by DeepRead AI
+              <Logo width={12} height={12} className="opacity-50 grayscale" /> Powered by DeepRead AI
             </span>
           </div>
         </div>
