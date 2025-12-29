@@ -6,6 +6,7 @@ This file tracks main tasks completed by AI agents. Only significant changes are
 
 ## 2025-12-29
 
+FIX: Allow re-uploading identical PDFs by using unique storage paths
 FIX: Configure pdfjs workerSrc for server PDF text extraction
 FIX: Use pdfjs legacy build with disabled worker in PDF text extraction
 FIX: Enforce PDF size limit and improve ingest error reporting for uploads

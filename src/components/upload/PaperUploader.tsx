@@ -106,12 +106,6 @@ export function PaperUploader({
       setProgress("Processing PDF...");
       const data = await response.json();
 
-      if (data.duplicate) {
-        setProgress(null);
-        setError("This PDF has already been uploaded");
-        return;
-      }
-
       setProgress(null);
       setFile(null);
       setArxivUrl("");
