@@ -6,7 +6,7 @@ This file tracks main tasks completed by AI agents. Only significant changes are
 
 ## 2025-12-29
 
-FEATURE: Make SmartPDFViewer the default reader view (fallback via ?viewer=classic)
+FEATURE: Restore PDFHighlighterViewer (v3) as the default reader (fallback ?viewer=v2 or ?viewer=classic)
 FIX: Allow re-uploading identical PDFs by using unique storage paths
 FIX: Configure pdfjs workerSrc for server PDF text extraction
 FIX: Use pdfjs legacy build with disabled worker in PDF text extraction

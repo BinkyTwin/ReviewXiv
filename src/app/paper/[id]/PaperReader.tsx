@@ -62,27 +62,25 @@ const SmartPDFViewer = dynamic(
   },
 );
 
-// PDFHighlighterViewer (v3) disabled due to React 18/19 compatibility issues
-// TODO: Re-enable when react-pdf-highlighter-extended supports React 19
-// const PDFHighlighterViewer = dynamic(
-//   () =>
-//     import("@/components/pdf-highlighter").then(
-//       (mod) => mod.PDFHighlighterViewer,
-//     ),
-//   {
-//     ssr: false,
-//     loading: () => (
-//       <div className="flex flex-col h-full bg-muted/30 p-4">
-//         <div className="space-y-4">
-//           <Skeleton className="h-[800px] w-full" />
-//           <div className="text-center text-sm text-muted-foreground">
-//             Chargement du PDF Highlighter...
-//           </div>
-//         </div>
-//       </div>
-//     ),
-//   },
-// );
+const PDFHighlighterViewer = dynamic(
+  () =>
+    import("@/components/pdf-highlighter").then(
+      (mod) => mod.PDFHighlighterViewer,
+    ),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="flex flex-col h-full bg-muted/30 p-4">
+        <div className="space-y-4">
+          <Skeleton className="h-[800px] w-full" />
+          <div className="text-center text-sm text-muted-foreground">
+            Chargement du PDF Highlighter...
+          </div>
+        </div>
+      </div>
+    ),
+  },
+);
 
 // Import SmartSelectionData type from SmartPDFViewer
 import type { SmartSelectionData } from "@/components/pdf-v2/SmartPDFViewer";
@@ -93,12 +91,11 @@ interface PaperReaderProps {
 }
 
 export function PaperReader({ paper, pdfUrl }: PaperReaderProps) {
-  // Viewer selection: default to SmartPDFViewer (v2) unless ?viewer=classic
-  // Note: v3 (PDFHighlighterViewer) disabled due to React 18/19 compatibility
+  // Viewer selection: default to PDFHighlighterViewer (v3)
   const searchParams = useSearchParams();
   const viewerMode = searchParams.get("viewer");
-  const useSmartViewer = viewerMode !== "classic";
-  const useHighlighterViewer = false; // Disabled: viewerMode === "v3"
+  const useSmartViewer = viewerMode === "v2";
+  const useHighlighterViewer = viewerMode !== "classic" && !useSmartViewer;
 
   const [activeCitation, setActiveCitation] = useState<Citation | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
@@ -612,8 +609,22 @@ export function PaperReader({ paper, pdfUrl }: PaperReaderProps) {
         className="h-full border-r border-border relative"
         style={{ width: `${pdfWidthPercent}%` }}
       >
-        {/* PDFHighlighterViewer (v3) disabled - React 18/19 compatibility issue */}
-        {useSmartViewer ? (
+        {useHighlighterViewer ? (
+          <PDFHighlighterViewer
+            pdfUrl={pdfUrl}
+            paperId={paper.id}
+            highlights={highlights}
+            activeCitation={activeCitation}
+            textItemsMap={textItemsMap}
+            onHighlightCreate={handleV3HighlightCreate}
+            onHighlightClick={handleHighlightClick}
+            onAskSelection={handleV3Ask}
+            onTranslateSelection={handleV3Translate}
+            onAskImage={handleV3AskImage}
+            onPageChange={setCurrentPage}
+            scrollToHighlightRef={scrollToHighlightRef}
+          />
+        ) : useSmartViewer ? (
           /* Smart PDF Viewer v2 - Mistral OCR */
           <>
             <SmartPDFViewer
