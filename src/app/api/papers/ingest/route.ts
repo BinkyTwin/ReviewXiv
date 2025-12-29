@@ -40,21 +40,6 @@ export async function POST(request: NextRequest) {
       .update(Buffer.from(buffer))
       .digest("hex");
 
-    // Check for existing paper with same hash (exclude failed uploads)
-    const { data: existing } = await supabase
-      .from("papers")
-      .select("id, status")
-      .eq("file_hash", fileHash)
-      .neq("status", "error")
-      .maybeSingle();
-
-    if (existing) {
-      return NextResponse.json({
-        paperId: existing.id,
-        duplicate: true,
-      });
-    }
-
     // Clean up any previous failed upload with same hash
     const { data: failedPapers } = await supabase
       .from("papers")
@@ -70,7 +55,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Upload to Supabase Storage
-    const storagePath = `${fileHash}.pdf`;
+    const storagePath = `${fileHash}-${crypto.randomUUID()}.pdf`;
     const { error: uploadError } = await supabase.storage
       .from("papers")
       .upload(storagePath, buffer, {
@@ -83,43 +68,11 @@ export async function POST(request: NextRequest) {
       const uploadStatus = getStorageStatus(uploadError);
       const uploadMessage = getStorageMessage(uploadError);
 
-      if (uploadStatus === 409) {
-        const { data: existingAfterUpload } = await supabase
-          .from("papers")
-          .select("id, status")
-          .eq("file_hash", fileHash)
-          .neq("status", "error")
-          .maybeSingle();
-
-        if (existingAfterUpload) {
-          return NextResponse.json({
-            paperId: existingAfterUpload.id,
-            duplicate: true,
-          });
-        }
-
-        const { error: upsertError } = await supabase.storage
-          .from("papers")
-          .upload(storagePath, buffer, {
-            contentType: "application/pdf",
-            upsert: true,
-          });
-
-        if (upsertError) {
-          console.error("Storage upsert error:", upsertError);
-          throw new Error(
-            `Failed to upload PDF to storage: ${getStorageMessage(
-              upsertError,
-            )}`,
-          );
-        }
-      } else {
-        throw new Error(
-          `Failed to upload PDF to storage: ${uploadMessage}${
-            uploadStatus ? ` (status ${uploadStatus})` : ""
-          }`,
-        );
-      }
+      throw new Error(
+        `Failed to upload PDF to storage: ${uploadMessage}${
+          uploadStatus ? ` (status ${uploadStatus})` : ""
+        }`,
+      );
     }
 
     // Extract title from filename

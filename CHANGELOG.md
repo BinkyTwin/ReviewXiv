@@ -6,6 +6,10 @@ This file tracks main tasks completed by AI agents. Only significant changes are
 
 ## 2025-12-29
 
+FEATURE: Restore PDFHighlighterViewer (v3) as the default reader (fallback ?viewer=v2 or ?viewer=classic)
+FIX: Allow re-uploading identical PDFs by using unique storage paths
+FIX: Configure pdfjs workerSrc for server PDF text extraction
+FIX: Use pdfjs legacy build with disabled worker in PDF text extraction
 FIX: Enforce PDF size limit and improve ingest error reporting for uploads
 FIX: Fix PDFViewer "Transport destroyed" crash - add mount checks and proper cleanup for PDF.js
 FIX: Fix React error #185 - defer ref state updates with requestAnimationFrame

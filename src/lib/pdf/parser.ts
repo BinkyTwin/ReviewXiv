@@ -1,5 +1,5 @@
-// Use pdfjs-dist for Node.js (server-side) - v4.x
-import * as pdfjsLib from "pdfjs-dist";
+// Use pdfjs-dist legacy build for Node.js (server-side)
+import * as pdfjsLib from "pdfjs-dist/legacy/build/pdf.mjs";
 import type { TextItem, PageData } from "@/types/pdf";
 
 interface PDFTextItem {
@@ -10,6 +10,11 @@ interface PDFTextItem {
   dir: string;
   fontName: string;
 }
+
+pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
+  "pdfjs-dist/legacy/build/pdf.worker.mjs",
+  import.meta.url,
+).toString();
 
 /**
  * Extract text data from a single PDF page
