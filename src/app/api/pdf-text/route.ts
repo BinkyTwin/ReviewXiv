@@ -1,10 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import { extractPageData } from "@/lib/pdf/parser";
-import * as pdfjsLib from "pdfjs-dist";
+import * as pdfjsLib from "pdfjs-dist/legacy/build/pdf.mjs";
 import type { PageData } from "@/types/pdf";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
+
+pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
+  "pdfjs-dist/legacy/build/pdf.worker.mjs",
+  import.meta.url,
+).toString();
 
 interface ExtractRequest {
   /** URL of the PDF to extract text from */
