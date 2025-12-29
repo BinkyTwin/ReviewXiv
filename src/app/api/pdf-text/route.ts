@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { extractPageData } from "@/lib/pdf/parser";
-import * as pdfjsLib from "pdfjs-dist";
+import * as pdfjsLib from "pdfjs-dist/legacy/build/pdf.mjs";
 import type { PageData } from "@/types/pdf";
 
 export const runtime = "nodejs";
@@ -63,6 +63,7 @@ export async function POST(request: NextRequest) {
     const pdfDoc = await pdfjsLib.getDocument({
       data: new Uint8Array(pdfBuffer),
       useSystemFonts: true,
+      disableWorker: true,
     }).promise;
 
     const totalPages = pdfDoc.numPages;
@@ -131,6 +132,7 @@ export async function GET(request: NextRequest) {
     const pdfDoc = await pdfjsLib.getDocument({
       data: new Uint8Array(pdfBuffer),
       useSystemFonts: true,
+      disableWorker: true,
     }).promise;
 
     const totalPages = pdfDoc.numPages;

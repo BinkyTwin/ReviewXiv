@@ -1,5 +1,5 @@
-// Use pdfjs-dist for Node.js (server-side) - v4.x
-import * as pdfjsLib from "pdfjs-dist";
+// Use pdfjs-dist legacy build for Node.js (server-side)
+import * as pdfjsLib from "pdfjs-dist/legacy/build/pdf.mjs";
 import type { TextItem, PageData } from "@/types/pdf";
 
 interface PDFTextItem {
@@ -84,6 +84,7 @@ export async function extractAllPages(
   const pdfDoc = await pdfjsLib.getDocument({
     data: new Uint8Array(pdfBuffer),
     useSystemFonts: true,
+    disableWorker: true,
   }).promise;
 
   const pages: PageData[] = [];
