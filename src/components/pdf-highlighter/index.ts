@@ -9,7 +9,7 @@ export { AreaSelectionTip } from "./AreaSelectionTip";
 
 // Types
 export type {
-  DeepReadHighlight,
+  ReviewXivHighlight,
   NewHighlightData,
   PDFHighlighterViewerProps,
   PageDimensions,

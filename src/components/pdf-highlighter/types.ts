@@ -17,10 +17,10 @@ import type { TextItem } from "@/types/pdf";
 export type TextItemsMap = Map<number, TextItem[]>;
 
 /**
- * Extension of Highlight for DeepRead
- * Adds DeepRead-specific properties (color, offsets)
+ * Extension of Highlight for ReviewXiv
+ * Adds ReviewXiv-specific properties (color, offsets)
  */
-export interface DeepReadHighlight extends ExtendedHighlight {
+export interface ReviewXivHighlight extends ExtendedHighlight {
   /** Highlight color */
   color: HighlightColor;
   /** Character offsets for citation compatibility */
@@ -134,7 +134,7 @@ export interface HighlightTipProps {
  */
 export interface HighlightPopupProps {
   /** The highlight being hovered */
-  highlight: DeepReadHighlight;
+  highlight: ReviewXivHighlight;
   /** Callback to edit the highlight */
   onEdit?: () => void;
   /** Callback to delete the highlight */

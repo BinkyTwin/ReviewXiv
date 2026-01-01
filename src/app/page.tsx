@@ -53,7 +53,7 @@ export default function Home() {
       <header className="fixed top-0 left-0 right-0 z-50 p-6 flex justify-between items-center max-w-7xl mx-auto">
         <div className="flex items-center gap-2">
           <Logo width={32} height={32} className="rounded-xl shadow-lg" />
-          <span className="font-bold tracking-tight text-xl">DeepRead</span>
+          <span className="font-bold tracking-tight text-xl">ReviewXiv</span>
         </div>
         <ModeToggle />
       </header>
@@ -66,7 +66,7 @@ export default function Home() {
           </div>
 
           <h1 className="text-6xl md:text-8xl font-bold tracking-tighter leading-none">
-            Deep<span className="text-muted-foreground/30">Read</span>
+            Review<span className="text-muted-foreground/30">Xiv</span>
           </h1>
 
           <p className="text-lg md:text-xl text-muted-foreground max-w-2xl mx-auto font-medium leading-relaxed">
@@ -147,7 +147,7 @@ export default function Home() {
           <div className="h-px w-12 bg-border/50" />
           <div className="flex items-center gap-6 text-[10px] font-bold uppercase tracking-[0.2em]">
             <span className="flex items-center gap-2 tracking-widest leading-none">
-              <Logo width={12} height={12} className="opacity-50 grayscale" /> Powered by DeepRead AI
+              <Logo width={12} height={12} className="opacity-50 grayscale" /> Powered by ReviewXiv AI
             </span>
           </div>
         </div>

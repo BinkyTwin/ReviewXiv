@@ -3,10 +3,10 @@ import type { HighlightRect } from "@/types/highlight";
 import type { PageDimensions } from "../types";
 
 /**
- * Converts ScaledPosition (react-pdf-highlighter) to HighlightRect[] (DeepRead)
+ * Converts ScaledPosition (react-pdf-highlighter) to HighlightRect[] (ReviewXiv)
  *
  * react-pdf-highlighter uses absolute coordinates (x1, y1, x2, y2) in pixels
- * DeepRead uses relative coordinates (x, y, width, height) as 0-1 percentages
+ * ReviewXiv uses relative coordinates (x, y, width, height) as 0-1 percentages
  */
 export function scaledPositionToRects(
   position: ScaledPosition,
@@ -23,7 +23,7 @@ export function scaledPositionToRects(
 }
 
 /**
- * Converts HighlightRect[] (DeepRead) to ScaledPosition (react-pdf-highlighter)
+ * Converts HighlightRect[] (ReviewXiv) to ScaledPosition (react-pdf-highlighter)
  */
 export function rectsToScaledPosition(
   rects: HighlightRect[],

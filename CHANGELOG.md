@@ -4,6 +4,12 @@ This file tracks main tasks completed by AI agents. Only significant changes are
 
 ---
 
+## 2026-01-01
+
+REFACTOR: Complete rebranding from DeepRead to ReviewXiv across entire codebase
+
+---
+
 ## 2025-12-29
 
 FIX: Improve dark mode contrast for user chat bubble text
@@ -57,7 +63,7 @@ FEATURE: Enable area selection with Alt+drag or toggle button
 FEATURE: Create ZoomToolbar component with zoom in/out/fit-width controls (Phase 6.2)
 FEATURE: Add pdfScaleValue state for zoom control in PDFHighlighterViewer
 FIX: Render persistent highlights with correct colors in v3 viewer (Phase 6.1)
-FEATURE: Add HIGHLIGHT_COLORS map for DeepRead → CSS rgba conversion
+FEATURE: Add HIGHLIGHT_COLORS map for ReviewXiv → CSS rgba conversion
 FEATURE: Implement CitationFlash component for visual citation highlighting in PDFHighlighterViewer
 FEATURE: Add textItemsMap prop to PDFHighlighterViewer for citation → rects conversion
 FEATURE: Connect offsetsToRects with CitationFlash for chat citations in v3 viewer

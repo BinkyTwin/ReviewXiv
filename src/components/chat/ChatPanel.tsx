@@ -349,7 +349,7 @@ export function ChatPanel({
           </div>
         </div>
         <p className="text-[10px] text-center text-muted-foreground mt-3 uppercase tracking-widest font-medium opacity-50">
-          DeepRead AI Assistant
+          ReviewXiv AI Assistant
         </p>
       </div>
     </div>

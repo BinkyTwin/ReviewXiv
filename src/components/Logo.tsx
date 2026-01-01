@@ -32,7 +32,7 @@ export function Logo({ className, width = 32, height = 32 }: LogoProps) {
   return (
     <Image
       src={src}
-      alt="DeepRead Logo"
+      alt="ReviewXiv Logo"
       width={width}
       height={height}
       className={`${className} object-contain`}
