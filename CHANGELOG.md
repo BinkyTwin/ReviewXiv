@@ -6,6 +6,9 @@ This file tracks main tasks completed by AI agents. Only significant changes are
 
 ## 2026-01-01
 
+TECH-001: Consolidate PDF viewer - remove PDFViewer (classic) and SmartPDFViewer (v2), keep only PDFHighlighterViewer based on react-pdf-highlighter-extended
+REFACTOR: Simplify PaperReader component by removing viewer selection logic and using single PDFHighlighterViewer
+FEATURE: Add library search and filters (full-text search, tags, reading status, sorting)
 REFACTOR: Complete rebranding from DeepRead to ReviewXiv across entire codebase
 
 ---
