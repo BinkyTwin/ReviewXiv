@@ -15,7 +15,7 @@ const geistMono = localFont({
 });
 
 export const metadata: Metadata = {
-  title: "DeepRead - Intelligence Artificielle pour la recherche",
+  title: "ReviewXiv - Intelligence Artificielle pour la recherche",
   description: "Analysez vos documents scientifiques avec une IA de pointe.",
 };
 

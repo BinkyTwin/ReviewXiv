@@ -31,7 +31,7 @@ import { ZoomToolbar } from "./ZoomToolbar";
 import { offsetsToRects } from "@/lib/highlight-renderer";
 import { cn } from "@/lib/utils";
 
-// Map DeepRead colors to highlight classes
+// Map ReviewXiv colors to highlight classes
 const HIGHLIGHT_CLASSES: Record<HighlightColor, string> = {
   yellow: "highlight-yellow",
   green: "highlight-green",

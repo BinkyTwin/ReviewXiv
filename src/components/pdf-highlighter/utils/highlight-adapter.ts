@@ -5,7 +5,7 @@ import type {
   CreateHighlightRequest,
 } from "@/types/highlight";
 import type {
-  DeepReadHighlight,
+  ReviewXivHighlight,
   PageDimensions,
   PageDimensionsMap,
 } from "../types";
@@ -20,7 +20,7 @@ import {
 export function supabaseToRphHighlight(
   highlight: Highlight,
   dimensions: PageDimensions,
-): DeepReadHighlight {
+): ReviewXivHighlight {
   const position = rectsToScaledPosition(
     highlight.rects,
     highlight.pageNumber,
@@ -47,7 +47,7 @@ export function supabaseToRphHighlight(
 export function supabaseHighlightsToRph(
   highlights: Highlight[],
   dimensionsMap: PageDimensionsMap,
-): DeepReadHighlight[] {
+): ReviewXivHighlight[] {
   return highlights
     .filter((h) => dimensionsMap.has(h.pageNumber))
     .map((h) => supabaseToRphHighlight(h, dimensionsMap.get(h.pageNumber)!));
@@ -77,7 +77,7 @@ export function rphToCreateHighlightRequest(
 }
 
 /**
- * Finds the original Supabase Highlight from a DeepReadHighlight ID
+ * Finds the original Supabase Highlight from a ReviewXivHighlight ID
  */
 export function findOriginalHighlight(
   id: string,
@@ -97,8 +97,8 @@ export function generateHighlightId(): string {
  * Checks if two highlights overlap
  */
 export function highlightsOverlap(
-  h1: DeepReadHighlight,
-  h2: DeepReadHighlight,
+  h1: ReviewXivHighlight,
+  h2: ReviewXivHighlight,
 ): boolean {
   if (
     h1.position.boundingRect.pageNumber !== h2.position.boundingRect.pageNumber

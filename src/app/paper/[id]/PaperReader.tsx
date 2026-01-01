@@ -129,7 +129,7 @@ export function PaperReader({ paper, pdfUrl }: PaperReaderProps) {
 
   // Load saved panel width from localStorage
   useEffect(() => {
-    const saved = localStorage.getItem("deepread-pdf-width");
+    const saved = localStorage.getItem("reviewxiv-pdf-width");
     if (saved) {
       const width = parseFloat(saved);
       if (!isNaN(width) && width >= 50 && width <= 90) {
@@ -599,12 +599,12 @@ export function PaperReader({ paper, pdfUrl }: PaperReaderProps) {
   }, []);
 
   const handleResizeEnd = useCallback(() => {
-    localStorage.setItem("deepread-pdf-width", pdfWidthPercent.toString());
+    localStorage.setItem("reviewxiv-pdf-width", pdfWidthPercent.toString());
   }, [pdfWidthPercent]);
 
   const handleResizeReset = useCallback(() => {
     setPdfWidthPercent(70);
-    localStorage.setItem("deepread-pdf-width", "70");
+    localStorage.setItem("reviewxiv-pdf-width", "70");
   }, []);
 
   return (

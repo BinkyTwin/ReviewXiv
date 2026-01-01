@@ -65,7 +65,7 @@ export async function POST(request: NextRequest) {
         Authorization: `Bearer ${apiKey}`,
         "HTTP-Referer":
           process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000",
-        "X-Title": "DeepRead",
+        "X-Title": "ReviewXiv",
       };
 
       const model =

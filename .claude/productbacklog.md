@@ -1,8 +1,8 @@
-# Product Backlog — DeepRead
+# Product Backlog — ReviewXiv
 
 ## 🎯 Vision & Objectives
 
-DeepRead est un outil de lecture et d'annotation de documents scientifiques (PDF) avec assistant IA intégré. L'objectif est de fournir une expérience "import intelligent" avec extraction automatique des métadonnées, navigation avancée, et Q&A contextuel.
+ReviewXiv est un outil de lecture et d'annotation de documents scientifiques (PDF) avec assistant IA intégré. L'objectif est de fournir une expérience "import intelligent" avec extraction automatique des métadonnées, navigation avancée, et Q&A contextuel.
 
 ---
 

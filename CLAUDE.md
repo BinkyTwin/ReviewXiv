@@ -1,4 +1,4 @@
-# CLAUDE.md - DeepRead AI Research Assistant
+# CLAUDE.md - ReviewXiv AI Research Assistant
 
 ## Description
 Application d'assistant de recherche IA pour analyser des documents académiques (PDF).
@@ -33,7 +33,7 @@ npm run lint         # ESLint
 ## Structure Projet
 
 ```
-deepread/
+reviewxiv/
 ├── src/
 │   ├── app/                    # Next.js App Router
 │   │   ├── api/                # API Routes
