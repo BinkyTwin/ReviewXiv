@@ -78,11 +78,12 @@ When Context7 is used:
 - Cite version if available
 - Use precise, version-aware steps from docs
 
-## Common libraries for DeepRead
+## Common libraries for reviewxiv
 
 | Library | Use case |
 |---------|----------|
 | `anthropic` | Claude API integration |
+| `openrouter` | Openrouter API integration |
 | `fastapi` | Backend API routes |
 | `pydantic` | Data validation |
 | `pymupdf` | PDF parsing |

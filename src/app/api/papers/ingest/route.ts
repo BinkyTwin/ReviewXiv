@@ -1,10 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { extractAllPages, chunkPageContent } from "@/lib/pdf/parser";
-import {
-  MAX_PDF_SIZE_BYTES,
-  MAX_PDF_SIZE_LABEL,
-} from "@/lib/pdf/constants";
+import { MAX_PDF_SIZE_BYTES, MAX_PDF_SIZE_LABEL } from "@/lib/pdf/constants";
 import crypto from "crypto";
 
 export const runtime = "nodejs";
@@ -156,19 +153,38 @@ export async function POST(request: NextRequest) {
     const hasOcrNeeded = pages.some((p) => !p.hasText);
     const finalStatus = hasOcrNeeded ? "ocr_needed" : "ready";
 
-    // Update paper with final status
+    // Count total chunks for embedding status
+    const { count: totalChunks } = await supabase
+      .from("chunks")
+      .select("id", { count: "exact", head: true })
+      .eq("paper_id", paper.id);
+
+    // Update paper with final status and chunk count
     await supabase
       .from("papers")
       .update({
         status: finalStatus,
         page_count: pages.length,
+        embedding_status: "pending",
+        total_chunks: totalChunks || 0,
+        embedded_chunks: 0,
       })
       .eq("id", paper.id);
+
+    // Trigger async embedding generation (fire and forget)
+    fetch(new URL("/api/embeddings/generate", request.url), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ paperId: paper.id }),
+    }).catch((err) => {
+      console.error("Failed to trigger embedding generation:", err);
+    });
 
     return NextResponse.json({
       paperId: paper.id,
       pageCount: pages.length,
       status: finalStatus,
+      embeddingStatus: "pending",
     });
   } catch (error) {
     console.error("Ingestion error:", error);

@@ -1,4 +1,4 @@
-Analyse un PDF pour le projet DeepRead.
+Analyse un PDF pour le projet reviewxiv.
 
 ## Fichier a analyser : $ARGUMENTS
 

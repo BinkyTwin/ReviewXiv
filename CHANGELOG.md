@@ -4,6 +4,42 @@ This file tracks main tasks completed by AI agents. Only significant changes are
 
 ---
 
+## 2026-01-02
+
+REFACTOR: Rewrite Supabase skill from MCP to CLI-based workflow
+  - Replace MCP-based instructions with Supabase CLI commands
+  - Add comprehensive command reference (migrations, db, functions, storage)
+  - Add database inspection tools documentation
+  - Document workflow rules and best practices
+  - Include project schema reference
+
+FEATURE: Implement RAG-001 - Modern RAG system with embeddings and semantic search
+  - Add OpenRouter embeddings client (text-embedding-3-small, 1536 dims)
+  - Add embedding generation API (/api/embeddings/generate)
+  - Add embedding status API (/api/embeddings/status)
+  - Add semantic search API (/api/search/chunks)
+  - Implement hybrid search (BM25 + vector similarity)
+  - Implement MMR (Maximum Marginal Relevance) for diverse results
+  - Add LLM-based re-ranking for improved relevance
+  - Integrate RAG into chat API with fallback to legacy pages mode
+  - Auto-trigger embedding generation after PDF ingestion
+
+FEATURE: Add Supabase migrations for RAG infrastructure
+  - Enable pgvector extension
+  - Add embedding column (4096 dims) to chunks table
+  - Add tsvector column for full-text search (BM25)
+  - Add HNSW index for fast vector similarity search
+  - Add embedding status tracking to papers table
+  - Create search_chunks_hybrid, search_chunks_vector, search_chunks_mmr functions
+
+REFACTOR: Update chat API to use RAG by default
+  - Default to semantic search instead of sending all pages
+  - Add useRag option for legacy compatibility
+  - Add ragOptions for fine-tuning retrieval (topK, useHybrid, useMmr, useReranking)
+  - Reduce token usage by ~80% (8 chunks vs all pages)
+
+---
+
 ## 2026-01-01
 
 TECH-001: Consolidate PDF viewer - remove PDFViewer (classic) and SmartPDFViewer (v2), keep only PDFHighlighterViewer based on react-pdf-highlighter-extended
