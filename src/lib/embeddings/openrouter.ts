@@ -36,10 +36,10 @@ export async function generateEmbeddings(
   texts: string[],
   model: string = DEFAULT_MODEL,
 ): Promise<EmbeddingResponse> {
-  const apiKey = process.env.OPENROUTER_API_KEY;
+  const apiKey = process.env.OPENROUTER_API;
 
   if (!apiKey) {
-    throw new Error("OPENROUTER_API_KEY is not configured");
+    throw new Error("OPENROUTER_API is not configured");
   }
 
   if (texts.length === 0) {

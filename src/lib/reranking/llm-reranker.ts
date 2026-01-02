@@ -26,10 +26,10 @@ export async function rerankWithLLM(
   chunks: ContextChunk[],
   topK: number = 8,
 ): Promise<ContextChunk[]> {
-  const apiKey = process.env.OPENROUTER_API_KEY;
+  const apiKey = process.env.OPENROUTER_API;
 
   if (!apiKey) {
-    console.warn("OPENROUTER_API_KEY not set, skipping re-ranking");
+    console.warn("OPENROUTER_API not set, skipping re-ranking");
     return chunks.slice(0, topK);
   }
 
@@ -97,7 +97,7 @@ async function scoreBatch(
   query: string,
   chunks: ContextChunk[],
 ): Promise<number[]> {
-  const apiKey = process.env.OPENROUTER_API_KEY;
+  const apiKey = process.env.OPENROUTER_API;
 
   // Build prompt for batch scoring
   const passages = chunks
