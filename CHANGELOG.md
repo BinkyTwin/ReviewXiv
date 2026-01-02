@@ -6,6 +6,12 @@ This file tracks main tasks completed by AI agents. Only significant changes are
 
 ## 2026-01-02
 
+FIX: Refactor RAG search to use direct function calls instead of HTTP fetch
+  - Extract search logic into src/lib/rag/search.ts module
+  - Update /api/chat to call searchChunks() directly
+  - Update /api/search/chunks to use shared module
+  - Fixes Vercel Authentication blocking internal API calls on preview deployments
+
 REFACTOR: Rewrite Supabase skill from MCP to CLI-based workflow
   - Replace MCP-based instructions with Supabase CLI commands
   - Add comprehensive command reference (migrations, db, functions, storage)

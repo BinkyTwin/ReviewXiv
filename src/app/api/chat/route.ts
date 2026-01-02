@@ -5,7 +5,8 @@ import {
   buildChunkContext,
   summarizeRetrievedChunks,
 } from "@/lib/rag/context-builder";
-import type { ContextChunk, RetrievalOptions } from "@/types/rag";
+import { searchChunks } from "@/lib/rag/search";
+import type { RetrievalOptions } from "@/types/rag";
 
 interface ChatRequest {
   paperId: string;
@@ -47,39 +48,19 @@ export async function POST(request: NextRequest) {
     let ragInfo = "";
 
     if (useRag) {
-      // Use RAG-based retrieval for focused context
+      // Use RAG-based retrieval for focused context (direct function call, no HTTP)
       try {
-        const searchResponse = await fetch(
-          new URL("/api/search/chunks", request.url),
+        const { chunks, searchTime, method } = await searchChunks(
+          body.paperId,
+          body.message,
           {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              paperId: body.paperId,
-              query: body.message,
-              options: {
-                topK: body.ragOptions?.topK || 8,
-                useHybrid: body.ragOptions?.useHybrid !== false,
-                useMmr: body.ragOptions?.useMmr !== false,
-                useReranking: body.ragOptions?.useReranking !== false,
-                mmrLambda: body.ragOptions?.mmrLambda || 0.7,
-              },
-            }),
+            topK: body.ragOptions?.topK || 8,
+            useHybrid: body.ragOptions?.useHybrid !== false,
+            useMmr: body.ragOptions?.useMmr !== false,
+            useReranking: body.ragOptions?.useReranking !== false,
+            mmrLambda: body.ragOptions?.mmrLambda || 0.7,
           },
         );
-
-        if (!searchResponse.ok) {
-          const errorText = await searchResponse.text();
-          console.error("RAG search failed:", errorText);
-          throw new Error("RAG search failed");
-        }
-
-        const { chunks, searchTime, method } =
-          (await searchResponse.json()) as {
-            chunks: ContextChunk[];
-            searchTime: number;
-            method: string;
-          };
 
         // Build context from retrieved chunks
         context = buildChunkContext(chunks, body.highlightContext);
