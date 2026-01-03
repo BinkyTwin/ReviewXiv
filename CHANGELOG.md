@@ -4,6 +4,12 @@ This file tracks main tasks completed by AI agents. Only significant changes are
 
 ---
 
+## 2026-01-03
+
+FIX: Remove undefined cleanupExpiredLocks() call in /api/embeddings/generate
+  - Remove redundant lock cleanup (handled automatically by acquireLock)
+  - Fixes Vercel deployment build error: Cannot find name 'cleanupExpiredLocks'
+
 ## 2026-01-02
 
 REVERT: Remove queue-based embedding system with Vercel Cron

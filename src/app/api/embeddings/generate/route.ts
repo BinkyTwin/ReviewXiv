@@ -43,9 +43,6 @@ export async function POST(
       );
     }
 
-    // Nettoyer les locks expirés avant d'essayer d'acquérir
-    await cleanupExpiredLocks();
-
     const supabase = await createClient();
 
     // Wrapper avec lock pour concurrence control
