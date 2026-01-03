@@ -10,6 +10,11 @@ FIX: Remove undefined cleanupExpiredLocks() call in /api/embeddings/generate
   - Remove redundant lock cleanup (handled automatically by acquireLock)
   - Fixes Vercel deployment build error: Cannot find name 'cleanupExpiredLocks'
 
+FIX: Configure Next.js body size limit to resolve 413 error on PDF upload
+  - Add experimental.serverActions.bodySizeLimit: 35mb in next.config.mjs
+  - Reduce MAX_PDF_SIZE from 50MB to 30MB for better compatibility
+  - Note: Vercel free tier has 4.5MB limit; requires paid plan for larger files
+
 ## 2026-01-02
 
 REVERT: Remove queue-based embedding system with Vercel Cron
