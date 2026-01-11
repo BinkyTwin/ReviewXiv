@@ -8,6 +8,7 @@ import type {
   PdfHighlighterUtils,
   PdfSelection,
   GhostHighlight,
+  ViewportHighlight,
 } from "react-pdf-highlighter-extended";
 import {
   PdfLoader,
@@ -61,8 +62,8 @@ interface TranslationHighlight extends Highlight {
 type ViewerHighlight = ColoredHighlight | TranslationHighlight;
 
 const isTranslationHighlight = (
-  highlight: ViewerHighlight,
-): highlight is TranslationHighlight =>
+  highlight: ViewportHighlight<ViewerHighlight>,
+): highlight is ViewportHighlight<TranslationHighlight> =>
   "kind" in highlight && highlight.kind === "translation";
 
 // Loading spinner component
@@ -171,7 +172,7 @@ interface HighlightContainerProps {
 }
 
 interface TranslationOverlayProps {
-  highlight: TranslationHighlight;
+  highlight: ViewportHighlight<TranslationHighlight>;
   onToggle?: (translationId: string, nextActive: boolean) => void;
 }
 
