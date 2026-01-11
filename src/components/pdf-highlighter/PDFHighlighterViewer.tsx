@@ -199,20 +199,24 @@ function TranslationOverlay({ highlight, onToggle }: TranslationOverlayProps) {
     onToggle?.(translation.id, !translation.isActive);
   };
 
+  // Calculate a slightly larger bounding box to ensure original text is fully covered
+  const coverBleed = 2; // px bleed
+
   return (
     <>
       <div
         className={cn(
-          "absolute rounded-sm transition-opacity duration-150 cursor-pointer overflow-hidden",
+          "absolute rounded-sm transition-all duration-200 cursor-pointer overflow-hidden",
           showTranslation ? "pointer-events-auto" : "pointer-events-none",
-          showTranslation ? "opacity-100" : "opacity-70",
-          "z-20",
+          showTranslation ? "opacity-100 scale-100" : "opacity-0 scale-[0.98]",
+          "z-20 apple-shadow hover:shadow-lg hover:ring-1 hover:ring-primary/20",
+          "bg-white dark:bg-zinc-950", // Use a solid background to mask perfectly
         )}
         style={{
-          left: boundingRect.left,
-          top: boundingRect.top,
-          width: boundingRect.width,
-          height: boundingRect.height,
+          left: boundingRect.left - coverBleed,
+          top: boundingRect.top - coverBleed,
+          width: boundingRect.width + coverBleed * 2,
+          height: boundingRect.height + coverBleed * 2,
         }}
         onClick={handleToggle}
         title={
@@ -221,43 +225,57 @@ function TranslationOverlay({ highlight, onToggle }: TranslationOverlayProps) {
             : "Cliquez pour voir la traduction"
         }
       >
+        {/* Background layer to ensure complete masking */}
+        <div className="absolute inset-0 bg-white dark:bg-zinc-950" />
+
+        {/* Text content with improved typography */}
         <div
           className={cn(
-            "absolute inset-0 rounded-sm bg-pdf transition-opacity",
+            "relative px-1 py-0.5 text-zinc-800 dark:text-zinc-100 transition-opacity duration-200",
+            "whitespace-pre-wrap select-text font-sans antialiased",
             showTranslation ? "opacity-100" : "opacity-0",
           )}
-        />
-        <div
-          className={cn(
-            "relative px-0.5 py-0 text-pdf-foreground transition-opacity",
-            "whitespace-pre-wrap select-text",
-            showTranslation ? "opacity-100" : "opacity-0",
-          )}
-          style={{ fontSize, lineHeight: `${lineHeight}px` }}
+          style={{
+            fontSize,
+            lineHeight: `${lineHeight}px`,
+            fontWeight: 450, // Slightly bolder for better readability on light BG
+            letterSpacing: "-0.01em"
+          }}
         >
           {translation.translatedText}
         </div>
+
+        {/* Decorative border */}
         {showTranslation && (
-          <div className="absolute inset-0 rounded-sm border border-pdf-border/60 pointer-events-none" />
+          <div className="absolute inset-0 rounded-sm border border-primary/10 pointer-events-none" />
+        )}
+
+        {/* Subtle indicator of translated content */}
+        {showTranslation && (
+          <div className="absolute bottom-0 right-1 text-[7px] text-primary/30 uppercase font-bold tracking-widest select-none pointer-events-none">
+            Translated
+          </div>
         )}
       </div>
+
+      {/* Floating toggle button with improved UX */}
       <button
         type="button"
         onClick={handleToggle}
         className={cn(
-          "absolute z-30 flex h-5 w-5 items-center justify-center",
-          "rounded-full border border-border text-[9px] font-semibold shadow-sm",
-          "pointer-events-auto",
+          "absolute z-30 flex h-6 w-6 items-center justify-center",
+          "rounded-full border border-border/50 text-[10px] font-bold shadow-md",
+          "pointer-events-auto transition-all duration-200 hover:scale-110 active:scale-95",
           showTranslation
-            ? "bg-primary text-primary-foreground"
-            : "bg-muted text-muted-foreground",
+            ? "bg-primary text-primary-foreground border-primary"
+            : "bg-white/90 backdrop-blur-sm text-zinc-600 border-zinc-200 hover:bg-white",
         )}
         style={{
           left: boundingRect.left + boundingRect.width,
           top: boundingRect.top,
           transform: "translate(-50%, -50%)",
         }}
-        title="Basculer la traduction"
+        title={showTranslation ? "Voir l'original" : "Traduire cette section"}
       >
         {badgeLabel}
       </button>
@@ -297,7 +315,7 @@ function HighlightContainer({
       <AreaHighlight
         highlight={highlight}
         isScrolledTo={isScrolledTo}
-        onChange={() => {}}
+        onChange={() => { }}
         bounds="parent"
       />
     );
@@ -365,25 +383,25 @@ function SelectionTipWrapper({
         onSave={
           onAreaHighlightCreate
             ? () => {
-                const { x1, y1, x2, y2 } = selection.position.boundingRect;
-                onAreaHighlightCreate(
-                  selection.content.image!,
-                  selection.position.boundingRect.pageNumber,
-                  { x: x1, y: y1, width: x2 - x1, height: y2 - y1 },
-                );
-                handleDismiss();
-              }
+              const { x1, y1, x2, y2 } = selection.position.boundingRect;
+              onAreaHighlightCreate(
+                selection.content.image!,
+                selection.position.boundingRect.pageNumber,
+                { x: x1, y: y1, width: x2 - x1, height: y2 - y1 },
+              );
+              handleDismiss();
+            }
             : undefined
         }
         onAsk={
           onAskImage
             ? () => {
-                onAskImage(
-                  selection.content.image!,
-                  selection.position.boundingRect.pageNumber,
-                );
-                handleDismiss();
-              }
+              onAskImage(
+                selection.content.image!,
+                selection.position.boundingRect.pageNumber,
+              );
+              handleDismiss();
+            }
             : undefined
         }
         onDismiss={handleDismiss}
@@ -403,31 +421,31 @@ function SelectionTipWrapper({
       onAsk={
         onAskSelection
           ? () => {
-              onAskSelection(
-                selection.content?.text || "",
-                selection.position.boundingRect.pageNumber,
-              );
-              handleDismiss();
-            }
+            onAskSelection(
+              selection.content?.text || "",
+              selection.position.boundingRect.pageNumber,
+            );
+            handleDismiss();
+          }
           : undefined
       }
       onTranslate={
         onTranslateSelection
           ? () => {
-              const rects = selection.position.rects.map((rect) => ({
-                x: rect.x1 / rect.width,
-                y: rect.y1 / rect.height,
-                width: (rect.x2 - rect.x1) / rect.width,
-                height: (rect.y2 - rect.y1) / rect.height,
-              }));
+            const rects = selection.position.rects.map((rect) => ({
+              x: rect.x1 / rect.width,
+              y: rect.y1 / rect.height,
+              width: (rect.x2 - rect.x1) / rect.width,
+              height: (rect.y2 - rect.y1) / rect.height,
+            }));
 
-              onTranslateSelection({
-                text: selection.content?.text || "",
-                pageNumber: selection.position.boundingRect.pageNumber,
-                rects,
-              });
-              handleDismiss();
-            }
+            onTranslateSelection({
+              text: selection.content?.text || "",
+              pageNumber: selection.position.boundingRect.pageNumber,
+              rects,
+            });
+            handleDismiss();
+          }
           : undefined
       }
       onDismiss={handleDismiss}
