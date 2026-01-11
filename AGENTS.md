@@ -41,12 +41,42 @@ npm run lint         # ESLint
 
 ## Database (Supabase CLI)
 
+### Installation & Setup
+```bash
+# Install as dev dependency
+npm install supabase --save-dev
+
+# Or run directly with npx (requires Node.js 20+)
+npx supabase --help
+
+# Initialize project (creates supabase/ folder)
+supabase init
+
+# Start local Supabase (requires Docker)
+supabase start
+
+# Stop local services
+supabase stop
+```
+
+### Migrations & Types
 ```bash
 supabase migration list      # Check status
 supabase migration new NAME  # Create migration
 supabase db push             # Apply to remote
+supabase db pull             # Pull remote schema
+supabase db diff --linked    # Compare local vs remote
 supabase gen types typescript --linked > src/types/database.ts
 ```
+
+### Local URLs (after `supabase start`)
+| Service | URL |
+|---------|-----|
+| API | http://localhost:54321 |
+| Studio | http://localhost:54323 |
+| DB | postgresql://postgres:postgres@localhost:54322/postgres |
+
+📚 **Full reference**: `.codex/skills/supabase-cli/SKILL.md`
 
 **Never use MCP for Supabase. Always use CLI.**
 
@@ -67,6 +97,11 @@ Use `$skill-name` to invoke:
 - `$fullstack-developer` - End-to-end features
 - `$ui-designer` - Design system
 - `$architect-reviewer` - Architecture review
+
+
+## Context7 rules 
+
+Always use Context7 MCP when I need library/API documentation, code generation, setup or configuration steps without me having to explicitly ask.
 
 ## Key Rules
 

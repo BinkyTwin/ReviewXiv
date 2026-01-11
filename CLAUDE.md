@@ -30,6 +30,45 @@ npm run build        # Build production
 npm run lint         # ESLint
 ```
 
+## Supabase CLI
+
+### Installation & Setup
+```bash
+# Install as dev dependency
+npm install supabase --save-dev
+
+# Or run directly with npx (requires Node.js 20+)
+npx supabase --help
+
+# Initialize project (creates supabase/ folder)
+supabase init
+
+# Start local Supabase (requires Docker)
+supabase start
+
+# Stop local services
+supabase stop
+```
+
+### Commandes Principales
+```bash
+supabase migration list      # Voir l'état des migrations
+supabase migration new NAME  # Créer une migration
+supabase db push             # Appliquer au remote
+supabase db pull             # Tirer le schéma remote
+supabase db diff --linked    # Comparer local vs remote
+supabase gen types typescript --linked > src/types/database.ts
+```
+
+### URLs Locales (après `supabase start`)
+| Service | URL |
+|---------|-----|
+| API | http://localhost:54321 |
+| Studio | http://localhost:54323 |
+| DB | postgresql://postgres:postgres@localhost:54322/postgres |
+
+📚 **Référence complète**: `.claude/skills/supabase-cli/SKILL.md`
+
 ## Structure Projet
 
 ```

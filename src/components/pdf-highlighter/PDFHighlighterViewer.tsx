@@ -23,6 +23,10 @@ import type {
   HighlightColor,
   HighlightRect,
 } from "@/types/highlight";
+import type {
+  InlineTranslation,
+  TranslationSelection,
+} from "@/types/translation";
 import type { PDFHighlighterViewerProps, PageDimensionsMap } from "./types";
 import { HighlightTip } from "./HighlightTip";
 import { AreaSelectionTip } from "./AreaSelectionTip";
@@ -48,6 +52,18 @@ const MAX_ZOOM = 1.5;
 interface ColoredHighlight extends Highlight {
   color?: HighlightColor;
 }
+
+interface TranslationHighlight extends Highlight {
+  kind: "translation";
+  translation: InlineTranslation;
+}
+
+type ViewerHighlight = ColoredHighlight | TranslationHighlight;
+
+const isTranslationHighlight = (
+  highlight: ViewerHighlight,
+): highlight is TranslationHighlight =>
+  "kind" in highlight && highlight.kind === "translation";
 
 // Loading spinner component
 function LoadingSpinner() {
@@ -104,13 +120,159 @@ function supabaseToExtendedHighlight(
   };
 }
 
+function translationToExtendedHighlight(
+  translation: InlineTranslation,
+  pageDimensions: PageDimensionsMap,
+): TranslationHighlight | null {
+  const pageDim = pageDimensions.get(translation.pageNumber);
+  if (!pageDim || translation.rects.length === 0) return null;
+
+  const rects = translation.rects.map((rect) => ({
+    pageNumber: translation.pageNumber,
+    x1: rect.x * pageDim.width,
+    y1: rect.y * pageDim.height,
+    x2: (rect.x + rect.width) * pageDim.width,
+    y2: (rect.y + rect.height) * pageDim.height,
+    width: pageDim.width,
+    height: pageDim.height,
+  }));
+
+  const x1 = Math.min(...rects.map((r) => r.x1));
+  const y1 = Math.min(...rects.map((r) => r.y1));
+  const x2 = Math.max(...rects.map((r) => r.x2));
+  const y2 = Math.max(...rects.map((r) => r.y2));
+
+  return {
+    id: translation.id,
+    position: {
+      boundingRect: {
+        pageNumber: translation.pageNumber,
+        x1,
+        y1,
+        x2,
+        y2,
+        width: pageDim.width,
+        height: pageDim.height,
+      },
+      rects,
+    },
+    content: {
+      text: translation.sourceText,
+    },
+    kind: "translation",
+    translation,
+  };
+}
+
 // Highlight container component - renders each highlight
 interface HighlightContainerProps {
   onHighlightClick?: (highlightId: string) => void;
+  onTranslationToggle?: (translationId: string, nextActive: boolean) => void;
 }
 
-function HighlightContainer({ onHighlightClick }: HighlightContainerProps) {
-  const { highlight, isScrolledTo } = useHighlightContainerContext();
+interface TranslationOverlayProps {
+  highlight: TranslationHighlight;
+  onToggle?: (translationId: string, nextActive: boolean) => void;
+}
+
+function TranslationOverlay({ highlight, onToggle }: TranslationOverlayProps) {
+  const { translation } = highlight;
+  const { boundingRect } = highlight.position;
+
+  if (boundingRect.width <= 0 || boundingRect.height <= 0) {
+    return null;
+  }
+
+  const fontSize = Math.max(10, Math.min(16, boundingRect.height * 0.8));
+  const showTranslation = translation.isActive;
+  const badgeLabel = translation.targetLanguage.toUpperCase().slice(0, 2);
+
+  const handleToggle = (event: MouseEvent) => {
+    event.stopPropagation();
+    onToggle?.(translation.id, !translation.isActive);
+  };
+
+  return (
+    <>
+      <div
+        className={cn(
+          "absolute rounded-sm transition-opacity duration-150 cursor-pointer",
+          showTranslation ? "pointer-events-auto" : "pointer-events-none",
+          showTranslation ? "opacity-100" : "opacity-70",
+          "z-20",
+        )}
+        style={{
+          left: boundingRect.left,
+          top: boundingRect.top,
+          width: boundingRect.width,
+          minHeight: boundingRect.height,
+        }}
+        onClick={handleToggle}
+        title={
+          showTranslation
+            ? "Cliquez pour voir l'original"
+            : "Cliquez pour voir la traduction"
+        }
+      >
+        <div
+          className={cn(
+            "absolute inset-0 rounded-sm bg-background transition-opacity",
+            showTranslation ? "opacity-95" : "opacity-0",
+          )}
+        />
+        <div
+          className={cn(
+            "relative px-1 py-0.5 leading-snug text-foreground transition-opacity",
+            "whitespace-pre-wrap select-text",
+            showTranslation ? "opacity-100" : "opacity-0",
+          )}
+          style={{ fontSize }}
+        >
+          {translation.translatedText}
+        </div>
+        {showTranslation && (
+          <div className="absolute inset-0 rounded-sm border border-border/60 pointer-events-none" />
+        )}
+      </div>
+      <button
+        type="button"
+        onClick={handleToggle}
+        className={cn(
+          "absolute z-30 flex h-5 w-5 items-center justify-center",
+          "rounded-full border border-border text-[9px] font-semibold shadow-sm",
+          "pointer-events-auto",
+          showTranslation
+            ? "bg-primary text-primary-foreground"
+            : "bg-muted text-muted-foreground",
+        )}
+        style={{
+          left: boundingRect.left + boundingRect.width,
+          top: boundingRect.top,
+          transform: "translate(-50%, -50%)",
+        }}
+        title="Basculer la traduction"
+      >
+        {badgeLabel}
+      </button>
+    </>
+  );
+}
+
+function HighlightContainer({
+  onHighlightClick,
+  onTranslationToggle,
+}: HighlightContainerProps) {
+  const { highlight, isScrolledTo } =
+    useHighlightContainerContext<ViewerHighlight>();
+
+  if (isTranslationHighlight(highlight)) {
+    return (
+      <TranslationOverlay
+        highlight={highlight}
+        onToggle={onTranslationToggle}
+      />
+    );
+  }
   // Cast to access color property - need unknown intermediate cast due to type differences
   const coloredHighlight = highlight as unknown as ColoredHighlight;
 
@@ -162,7 +324,7 @@ function HighlightContainer({ onHighlightClick }: HighlightContainerProps) {
 interface SelectionTipWrapperProps {
   onAddHighlight: (color: HighlightColor) => void;
   onAskSelection?: (text: string, page: number) => void;
-  onTranslateSelection?: (text: string, page: number) => void;
+  onTranslateSelection?: (selection: TranslationSelection) => void;
   onAskImage?: (imageData: string, page: number) => void;
   onAreaHighlightCreate?: (
     imageData: string,
@@ -245,10 +407,18 @@ function SelectionTipWrapper({
       onTranslate={
         onTranslateSelection
           ? () => {
-              onTranslateSelection(
-                selection.content?.text || "",
-                selection.position.boundingRect.pageNumber,
-              );
+              const rects = selection.position.rects.map((rect) => ({
+                x: rect.x1 / rect.width,
+                y: rect.y1 / rect.height,
+                width: (rect.x2 - rect.x1) / rect.width,
+                height: (rect.y2 - rect.y1) / rect.height,
+              }));
+
+              onTranslateSelection({
+                text: selection.content?.text || "",
+                pageNumber: selection.position.boundingRect.pageNumber,
+                rects,
+              });
               handleDismiss();
             }
           : undefined
@@ -263,27 +433,28 @@ interface PdfHighlighterInnerProps {
   pdfDocument: PDFDocumentProxy;
   areaSelectionMode: boolean;
   scaleValue: "page-width" | number;
-  extendedHighlights: ColoredHighlight[];
+  viewerHighlights: ViewerHighlight[];
   highlighterUtilsRef: React.MutableRefObject<PdfHighlighterUtils | undefined>;
   onPageDimensionsChange: (dimensions: PageDimensionsMap) => void;
   onViewerReady: () => void;
   onHighlightCreate: (selection: PdfSelection, color: HighlightColor) => void;
   onHighlightClick?: (highlightId: string) => void;
   onAskSelection?: (text: string, page: number) => void;
-  onTranslateSelection?: (text: string, page: number) => void;
+  onTranslateSelection?: (selection: TranslationSelection) => void;
   onAskImage?: (imageData: string, page: number) => void;
   onAreaHighlightCreate?: (
     imageData: string,
     page: number,
     position: { x: number; y: number; width: number; height: number },
   ) => void;
+  onTranslationToggle?: (translationId: string, nextActive: boolean) => void;
 }
 
 function PdfHighlighterInner({
   pdfDocument,
   areaSelectionMode,
   scaleValue,
-  extendedHighlights,
+  viewerHighlights,
   highlighterUtilsRef,
   onPageDimensionsChange,
   onViewerReady,
@@ -293,6 +464,7 @@ function PdfHighlighterInner({
   onTranslateSelection,
   onAskImage,
   onAreaHighlightCreate,
+  onTranslationToggle,
 }: PdfHighlighterInnerProps) {
   // Store current selection ref for highlight creation
   const currentSelectionRef = useRef<PdfSelection | null>(null);
@@ -377,7 +549,7 @@ function PdfHighlighterInner({
       pdfDocument={pdfDocument}
       enableAreaSelection={enableAreaSelectionFn}
       pdfScaleValue={scaleValue}
-      highlights={extendedHighlights}
+      highlights={viewerHighlights}
       onSelection={handleSelection}
       onCreateGhostHighlight={handleCreateGhostHighlight}
       onRemoveGhostHighlight={handleRemoveGhostHighlight}
@@ -395,7 +567,10 @@ function PdfHighlighterInner({
       }
       style={{ height: "100%", width: "100%", position: "absolute" }}
     >
-      <HighlightContainer onHighlightClick={onHighlightClick} />
+      <HighlightContainer
+        onHighlightClick={onHighlightClick}
+        onTranslationToggle={onTranslationToggle}
+      />
     </PdfHighlighter>
   );
 }
@@ -404,6 +579,7 @@ export function PDFHighlighterViewer({
   pdfUrl,
   paperId,
   highlights = [],
+  translations = [],
   activeCitation,
   textItemsMap,
   onHighlightCreate,
@@ -413,6 +589,10 @@ export function PDFHighlighterViewer({
   onAskImage,
   onAreaHighlightCreate,
   scrollToHighlightRef,
+  onTranslationToggle,
+  translationLanguage,
+  translationLanguageOptions,
+  onTranslationLanguageChange,
   className,
 }: PDFHighlighterViewerProps) {
   // Refs
@@ -483,8 +663,20 @@ export function PDFHighlighterViewer({
     if (!viewerReady || pageDimensionsMap.size === 0) return [];
     return highlights
       .map((h) => supabaseToExtendedHighlight(h, pageDimensionsMap))
-      .filter((h): h is Highlight => h !== null);
+      .filter((h): h is ColoredHighlight => h !== null);
   }, [highlights, pageDimensionsMap, viewerReady]);
+
+  const translationHighlights = useMemo(() => {
+    if (!viewerReady || pageDimensionsMap.size === 0) return [];
+    return translations
+      .map((t) => translationToExtendedHighlight(t, pageDimensionsMap))
+      .filter((t): t is TranslationHighlight => t !== null);
+  }, [translations, pageDimensionsMap, viewerReady]);
+
+  const viewerHighlights = useMemo<ViewerHighlight[]>(
+    () => [...extendedHighlights, ...translationHighlights],
+    [extendedHighlights, translationHighlights],
+  );
 
   const zoomEnabled = Boolean(fitScale);
   const canZoomIn = zoomLevel < MAX_ZOOM - 0.001;
@@ -624,6 +816,9 @@ export function PDFHighlighterViewer({
         canZoomOut={canZoomOut}
         areaSelectionMode={areaSelectionMode}
         onToggleAreaSelection={handleToggleAreaSelection}
+        translationLanguage={translationLanguage}
+        translationLanguageOptions={translationLanguageOptions}
+        onTranslationLanguageChange={onTranslationLanguageChange}
       />
 
       {/* PDF Viewer */}
@@ -643,7 +838,7 @@ export function PDFHighlighterViewer({
               pdfDocument={pdfDocument}
               areaSelectionMode={areaSelectionMode}
               scaleValue={scaleValue}
-              extendedHighlights={extendedHighlights}
+              viewerHighlights={viewerHighlights}
               highlighterUtilsRef={highlighterUtilsRef}
               onPageDimensionsChange={handlePageDimensionsChange}
               onViewerReady={handleViewerReady}
@@ -653,6 +848,7 @@ export function PDFHighlighterViewer({
               onTranslateSelection={onTranslateSelection}
               onAskImage={onAskImage}
               onAreaHighlightCreate={onAreaHighlightCreate}
+              onTranslationToggle={onTranslationToggle}
             />
           )}
         </PdfLoader>

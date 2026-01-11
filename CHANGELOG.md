@@ -4,6 +4,11 @@ This file tracks main tasks completed by AI agents. Only significant changes are
 
 ---
 
+## 2026-01-11
+
+FEATURE: Add inline translation overlays in the PDFHighlighter viewer
+FEATURE: Save translated selections with target language control
+
 ## 2026-01-03
 
 FIX: Remove undefined cleanupExpiredLocks() call in /api/embeddings/generate
