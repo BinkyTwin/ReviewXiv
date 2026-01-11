@@ -11,6 +11,7 @@ FEATURE: Save translated selections with target language control
 FIX: Use viewport highlight coordinates for translation overlays
 FIX: Use request origin and cookies for translate -> llm internal calls
 FIX: Avoid conditional hook usage in PDFHighlighterViewer highlight container
+FIX: Constrain translation overlay size and lock to white PDF surface
 
 ## 2026-01-03
 

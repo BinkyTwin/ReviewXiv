@@ -179,12 +179,18 @@ interface TranslationOverlayProps {
 function TranslationOverlay({ highlight, onToggle }: TranslationOverlayProps) {
   const { translation } = highlight;
   const { boundingRect } = highlight.position;
+  const rects = highlight.position.rects;
 
   if (boundingRect.width <= 0 || boundingRect.height <= 0) {
     return null;
   }
 
-  const fontSize = Math.max(10, Math.min(16, boundingRect.height * 0.8));
+  const averageRectHeight =
+    rects.length > 0
+      ? rects.reduce((sum, rect) => sum + rect.height, 0) / rects.length
+      : boundingRect.height;
+  const fontSize = Math.max(9, Math.min(16, averageRectHeight * 0.9));
+  const lineHeight = Math.max(fontSize, averageRectHeight);
   const showTranslation = translation.isActive;
   const badgeLabel = translation.targetLanguage.toUpperCase().slice(0, 2);
 
@@ -197,7 +203,7 @@ function TranslationOverlay({ highlight, onToggle }: TranslationOverlayProps) {
     <>
       <div
         className={cn(
-          "absolute rounded-sm transition-opacity duration-150 cursor-pointer",
+          "absolute rounded-sm transition-opacity duration-150 cursor-pointer overflow-hidden",
           showTranslation ? "pointer-events-auto" : "pointer-events-none",
           showTranslation ? "opacity-100" : "opacity-70",
           "z-20",
@@ -206,7 +212,7 @@ function TranslationOverlay({ highlight, onToggle }: TranslationOverlayProps) {
           left: boundingRect.left,
           top: boundingRect.top,
           width: boundingRect.width,
-          minHeight: boundingRect.height,
+          height: boundingRect.height,
         }}
         onClick={handleToggle}
         title={
@@ -217,22 +223,22 @@ function TranslationOverlay({ highlight, onToggle }: TranslationOverlayProps) {
       >
         <div
           className={cn(
-            "absolute inset-0 rounded-sm bg-background transition-opacity",
-            showTranslation ? "opacity-95" : "opacity-0",
+            "absolute inset-0 rounded-sm bg-pdf transition-opacity",
+            showTranslation ? "opacity-100" : "opacity-0",
           )}
         />
         <div
           className={cn(
-            "relative px-1 py-0.5 leading-snug text-foreground transition-opacity",
+            "relative px-0.5 py-0 text-pdf-foreground transition-opacity",
             "whitespace-pre-wrap select-text",
             showTranslation ? "opacity-100" : "opacity-0",
           )}
-          style={{ fontSize }}
+          style={{ fontSize, lineHeight: `${lineHeight}px` }}
         >
           {translation.translatedText}
         </div>
         {showTranslation && (
-          <div className="absolute inset-0 rounded-sm border border-border/60 pointer-events-none" />
+          <div className="absolute inset-0 rounded-sm border border-pdf-border/60 pointer-events-none" />
         )}
       </div>
       <button
