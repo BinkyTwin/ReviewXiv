@@ -209,7 +209,7 @@ function TranslationOverlay({ highlight, onToggle }: TranslationOverlayProps) {
           "absolute rounded-sm transition-all duration-200 cursor-pointer overflow-hidden",
           showTranslation ? "pointer-events-auto" : "pointer-events-none",
           showTranslation ? "opacity-100 scale-100" : "opacity-0 scale-[0.98]",
-          "z-[100] apple-shadow hover:shadow-lg hover:ring-1 hover:ring-primary/20",
+          "z-[99999] isolate mix-blend-normal apple-shadow hover:shadow-lg hover:ring-1 hover:ring-primary/20",
           "!bg-white dark:!bg-zinc-950", // Force solid background
         )}
         style={{
