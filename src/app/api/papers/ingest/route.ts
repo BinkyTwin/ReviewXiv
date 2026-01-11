@@ -1,11 +1,20 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { extractAllPages, chunkPageContent } from "@/lib/pdf/parser";
-import {
-  MAX_PDF_SIZE_BYTES,
-  MAX_PDF_SIZE_LABEL,
-} from "@/lib/pdf/constants";
+import { MAX_PDF_SIZE_BYTES, MAX_PDF_SIZE_LABEL } from "@/lib/pdf/constants";
 import crypto from "crypto";
+
+/**
+ * Sanitize text for PostgreSQL - remove null characters and other problematic Unicode
+ */
+function sanitizeTextForDb(text: string | null | undefined): string {
+  if (!text) return "";
+  // Remove null characters (\u0000) which PostgreSQL cannot store in text fields
+  // Also remove other control characters that might cause issues
+  return text
+    .replace(/\u0000/g, "")
+    .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g, "");
+}
 
 export const runtime = "nodejs";
 export const maxDuration = 300;
@@ -118,12 +127,15 @@ export async function POST(request: NextRequest) {
 
     // Insert pages
     for (const page of pages) {
+      // Sanitize text content to remove null characters that PostgreSQL can't handle
+      const sanitizedTextContent = sanitizeTextForDb(page.textContent);
+
       const { data: pageData, error: pageError } = await supabase
         .from("paper_pages")
         .insert({
           paper_id: paper.id,
           page_number: page.pageNumber,
-          text_content: page.textContent,
+          text_content: sanitizedTextContent,
           text_items: page.textItems,
           width: page.width,
           height: page.height,
@@ -137,15 +149,15 @@ export async function POST(request: NextRequest) {
         continue;
       }
 
-      // Create chunks for this page
-      const chunks = chunkPageContent(page.textContent);
+      // Create chunks for this page (using sanitized content)
+      const chunks = chunkPageContent(sanitizedTextContent);
       for (let i = 0; i < chunks.length; i++) {
         await supabase.from("chunks").insert({
           paper_id: paper.id,
           page_id: pageData.id,
           page_number: page.pageNumber,
           chunk_index: i,
-          content: chunks[i].content,
+          content: sanitizeTextForDb(chunks[i].content),
           start_offset: chunks[i].startOffset,
           end_offset: chunks[i].endOffset,
         });
@@ -156,19 +168,31 @@ export async function POST(request: NextRequest) {
     const hasOcrNeeded = pages.some((p) => !p.hasText);
     const finalStatus = hasOcrNeeded ? "ocr_needed" : "ready";
 
-    // Update paper with final status
+    // Count total chunks for embedding status
+    const { count: totalChunks } = await supabase
+      .from("chunks")
+      .select("id", { count: "exact", head: true })
+      .eq("paper_id", paper.id);
+
+    // Update paper with final status and chunk count
     await supabase
       .from("papers")
       .update({
         status: finalStatus,
         page_count: pages.length,
+        embedding_status: "pending",
+        total_chunks: totalChunks || 0,
+        embedded_chunks: 0,
       })
       .eq("id", paper.id);
+
+
 
     return NextResponse.json({
       paperId: paper.id,
       pageCount: pages.length,
       status: finalStatus,
+      embeddingStatus: "pending",
     });
   } catch (error) {
     console.error("Ingestion error:", error);

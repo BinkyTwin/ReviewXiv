@@ -1,18 +1,29 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { buildPageContext, CHAT_SYSTEM_PROMPT } from "@/lib/citations/prompts";
+import {
+  buildChunkContext,
+  summarizeRetrievedChunks,
+} from "@/lib/rag/context-builder";
+import { searchChunks } from "@/lib/rag/search";
+import type { RetrievalOptions } from "@/types/rag";
 
 interface ChatRequest {
   paperId: string;
   conversationId?: string;
   message: string;
-  pages: Array<{ pageNumber: number; textContent: string }>;
+  /** Pages for legacy mode (when RAG is disabled) */
+  pages?: Array<{ pageNumber: number; textContent: string }>;
   highlightContext?: {
     page: number;
     text: string;
   };
   /** Base64 image data URL for vision analysis */
   imageData?: string;
+  /** Use RAG-based retrieval (default: true) */
+  useRag?: boolean;
+  /** RAG retrieval options */
+  ragOptions?: RetrievalOptions;
 }
 
 type MessageContent =
@@ -31,8 +42,81 @@ export async function POST(request: NextRequest) {
     const body: ChatRequest = await request.json();
     const supabase = await createClient();
 
-    // Build context from pages
-    const context = buildPageContext(body.pages, body.highlightContext);
+    // Determine if RAG should be used (default: true)
+    const useRag = body.useRag !== false;
+    let context: string;
+    let ragInfo = "";
+
+    // Lazy embeddings trigger: générer les embeddings manquants si nécessaire
+    if (useRag) {
+      const { data: paper } = await supabase
+        .from("papers")
+        .select("embedding_status")
+        .eq("id", body.paperId)
+        .single();
+
+      const needsEmbeddings = paper?.embedding_status === "pending" || paper?.embedding_status === "error";
+
+      if (needsEmbeddings) {
+        console.log(`[LAZY EMBEDDINGS] Triggering generation for paper ${body.paperId}...`);
+
+        // Déclenchement asynchrone (non-bloquant) pour ne pas bloquer la requête
+        fetch(new URL("/api/embeddings/generate", request.url), {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ paperId: body.paperId }),
+        }).catch((err) => {
+          console.error("[LAZY EMBEDDINGS] Failed to trigger generation:", err);
+        });
+
+        // Continue avec le fallback (pages) pour cette requête
+        // La prochaine requête utilisera les embeddings générés
+        console.log("[LAZY EMBEDDINGS] Using page fallback for this request");
+        ragInfo = "[RAG: lazy embeddings generating, using page fallback]";
+      }
+    }
+
+    if (useRag) {
+      // Use RAG-based retrieval for focused context (direct function call, no HTTP)
+      try {
+        const { chunks, searchTime, method } = await searchChunks(
+          body.paperId,
+          body.message,
+          {
+            topK: body.ragOptions?.topK || 8,
+            useHybrid: body.ragOptions?.useHybrid !== false,
+            useMmr: body.ragOptions?.useMmr !== false,
+            useReranking: body.ragOptions?.useReranking !== false,
+            mmrLambda: body.ragOptions?.mmrLambda || 0.7,
+          },
+        );
+
+        // Build context from retrieved chunks
+        context = buildChunkContext(chunks, body.highlightContext);
+        ragInfo = `[RAG: ${summarizeRetrievedChunks(chunks)} in ${searchTime}ms via ${method}]`;
+        console.log(ragInfo);
+      } catch (ragError) {
+        console.error("RAG failed, falling back to pages:", ragError);
+        // Fallback to legacy page-based context if RAG fails
+        if (body.pages && body.pages.length > 0) {
+          context = buildPageContext(body.pages, body.highlightContext);
+          ragInfo = "[RAG: fallback to pages]";
+        } else {
+          throw new Error(
+            "RAG search failed and no pages provided for fallback",
+          );
+        }
+      }
+    } else if (body.pages && body.pages.length > 0) {
+      // Legacy mode: use provided pages
+      context = buildPageContext(body.pages, body.highlightContext);
+      ragInfo = "[RAG: disabled, using pages]";
+    } else {
+      return NextResponse.json(
+        { error: "Either RAG must be enabled or pages must be provided" },
+        { status: 400 },
+      );
+    }
 
     // Limit context size (rough estimate: 4 chars per token, max ~8000 tokens for context)
     const maxContextLength = 32000;

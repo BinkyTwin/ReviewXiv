@@ -1,4 +1,4 @@
-Lance les tests pour DeepRead.
+Lance les tests pour reviewxiv.
 
 ## Cible : $ARGUMENTS
 
@@ -7,16 +7,16 @@ Lance les tests pour DeepRead.
 1. **Si $ARGUMENTS est vide** :
    - Lance les tests backend :
      ```bash
-     cd deepread-api && pytest -v
+     cd reviewxiv-api && pytest -v
      ```
    - Lance les tests frontend :
      ```bash
-     cd deepread-app && npm test
+     cd reviewxiv-app && npm test
      ```
 
 2. **Si $ARGUMENTS specifie un module** :
-   - Backend : `cd deepread-api && pytest -v $ARGUMENTS`
-   - Frontend : `cd deepread-app && npm test -- $ARGUMENTS`
+   - Backend : `cd reviewxiv-api && pytest -v $ARGUMENTS`
+   - Frontend : `cd reviewxiv-app && npm test -- $ARGUMENTS`
 
 3. **Analyse les resultats** :
    - Si tests passent : resume brievement

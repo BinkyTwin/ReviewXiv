@@ -20,8 +20,17 @@ import type { Citation } from "@/types/citation";
 import type { TextItem } from "@/types/pdf";
 import type {
   Highlight,
-  HighlightColor,
+  HighlightRect,
 } from "@/types/highlight";
+import type {
+  InlineTranslation,
+  TranslationLanguage,
+  TranslationSelection,
+} from "@/types/translation";
+import {
+  TRANSLATION_LANGUAGES,
+  isTranslationLanguage,
+} from "@/types/translation";
 
 const PDFHighlighterViewer = dynamic(
   () =>
@@ -62,10 +71,9 @@ export function PaperReader({ paper, pdfUrl }: PaperReaderProps) {
     imageData: string;
     page: number;
   } | null>(null);
-  const [translationModal, setTranslationModal] = useState<{
-    isOpen: boolean;
-    text: string;
-  }>({ isOpen: false, text: "" });
+  const [translations, setTranslations] = useState<InlineTranslation[]>([]);
+  const [translationLanguage, setTranslationLanguage] =
+    useState<TranslationLanguage>("fr");
   const [activeTab, setActiveTab] = useState<"chat" | "notes">("chat");
   const [pdfWidthPercent, setPdfWidthPercent] = useState(70);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -79,6 +87,20 @@ export function PaperReader({ paper, pdfUrl }: PaperReaderProps) {
       }
     }
   }, []);
+
+  useEffect(() => {
+    const saved = localStorage.getItem("reviewxiv-translation-language");
+    if (saved && isTranslationLanguage(saved)) {
+      setTranslationLanguage(saved);
+    }
+  }, []);
+
+  useEffect(() => {
+    localStorage.setItem(
+      "reviewxiv-translation-language",
+      translationLanguage,
+    );
+  }, [translationLanguage]);
 
   const scrollToHighlightRef = useRef<((highlightId: string) => void) | null>(
     null,
@@ -114,6 +136,22 @@ export function PaperReader({ paper, pdfUrl }: PaperReaderProps) {
     };
 
     fetchHighlights();
+  }, [paper.id]);
+
+  useEffect(() => {
+    const fetchTranslations = async () => {
+      try {
+        const response = await fetch(`/api/translations?paperId=${paper.id}`);
+        if (response.ok) {
+          const data = await response.json();
+          setTranslations(data.translations || []);
+        }
+      } catch (error) {
+        console.error("Error fetching translations:", error);
+      }
+    };
+
+    fetchTranslations();
   }, [paper.id]);
 
   const handleCitationClick = useCallback((citation: Citation) => {
@@ -241,9 +279,188 @@ export function PaperReader({ paper, pdfUrl }: PaperReaderProps) {
     setActiveTab("chat");
   }, []);
 
-  const handleV3Translate = useCallback((text: string, page: number) => {
-    setTranslationModal({ isOpen: true, text });
-  }, []);
+  const getSelectionOffsets = useCallback(
+    (pageNumber: number, rects: HighlightRect[], selectedText: string) => {
+      const pageTextItems = textItemsMap.get(pageNumber);
+      if (pageTextItems && rects.length > 0) {
+        const overlaps = (a: HighlightRect, b: HighlightRect) => {
+          const overlapX =
+            Math.min(a.x + a.width, b.x + b.width) - Math.max(a.x, b.x);
+          const overlapY =
+            Math.min(a.y + a.height, b.y + b.height) - Math.max(a.y, b.y);
+          return overlapX > 0 && overlapY > 0;
+        };
+
+        const matchingItems = pageTextItems.filter((item) =>
+          rects.some((rect) =>
+            overlaps(
+              { x: item.x, y: item.y, width: item.width, height: item.height },
+              rect,
+            ),
+          ),
+        );
+
+        if (matchingItems.length > 0) {
+          const startOffset = Math.min(
+            ...matchingItems.map((item) => item.startOffset),
+          );
+          const endOffset = Math.max(
+            ...matchingItems.map((item) => item.endOffset),
+          );
+
+          return { startOffset, endOffset };
+        }
+      }
+
+      const pageText = pageTextMap.get(pageNumber) || "";
+      const normalizedText = selectedText.trim();
+      if (normalizedText && pageText) {
+        const index = pageText.indexOf(normalizedText);
+        if (index >= 0) {
+          return { startOffset: index, endOffset: index + normalizedText.length };
+        }
+      }
+
+      return {
+        startOffset: 0,
+        endOffset: Math.max(0, selectedText.length),
+      };
+    },
+    [pageTextMap, textItemsMap],
+  );
+
+  const handleTranslationToggle = useCallback(
+    async (translationId: string, nextActive: boolean) => {
+      setTranslations((prev) =>
+        prev.map((translation) =>
+          translation.id === translationId
+            ? { ...translation, isActive: nextActive }
+            : translation,
+        ),
+      );
+
+      try {
+        const response = await fetch(
+          `/api/translations?id=${translationId}`,
+          {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ isActive: nextActive }),
+          },
+        );
+
+        if (!response.ok) {
+          throw new Error("Failed to toggle translation");
+        }
+
+        const data = await response.json();
+        setTranslations((prev) =>
+          prev.map((translation) =>
+            translation.id === translationId
+              ? { ...translation, isActive: data.translation.isActive }
+              : translation,
+          ),
+        );
+      } catch (error) {
+        console.error("Error toggling translation:", error);
+        setTranslations((prev) =>
+          prev.map((translation) =>
+            translation.id === translationId
+              ? { ...translation, isActive: !nextActive }
+              : translation,
+          ),
+        );
+      }
+    },
+    [],
+  );
+
+  const handleV3Translate = useCallback(
+    async (selection: TranslationSelection) => {
+      const trimmedText = selection.text.trim();
+      if (!trimmedText || selection.rects.length === 0) return;
+
+      const { startOffset, endOffset } = getSelectionOffsets(
+        selection.pageNumber,
+        selection.rects,
+        trimmedText,
+      );
+
+      const existingTranslation = translations.find(
+        (translation) =>
+          translation.pageNumber === selection.pageNumber &&
+          translation.startOffset === startOffset &&
+          translation.endOffset === endOffset &&
+          translation.targetLanguage === translationLanguage,
+      );
+
+      if (existingTranslation) {
+        if (!existingTranslation.isActive) {
+          await handleTranslationToggle(existingTranslation.id, true);
+        }
+        return;
+      }
+
+      try {
+        const translateResponse = await fetch("/api/translate", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            text: trimmedText,
+            targetLanguage: translationLanguage,
+          }),
+        });
+
+        if (!translateResponse.ok) {
+          throw new Error("Translation request failed");
+        }
+
+        const translateData = await translateResponse.json();
+        const translatedText = translateData.translation?.trim() || "";
+        const sourceLanguage =
+          translateData.sourceLanguage && translateData.sourceLanguage !== "auto"
+            ? translateData.sourceLanguage
+            : undefined;
+
+        if (!translatedText) {
+          throw new Error("Empty translation response");
+        }
+
+        const createResponse = await fetch("/api/translations", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            paperId: paper.id,
+            pageNumber: selection.pageNumber,
+            sourceText: trimmedText,
+            sourceLanguage,
+            targetLanguage: translationLanguage,
+            translatedText,
+            startOffset,
+            endOffset,
+            rects: selection.rects,
+            isActive: true,
+          }),
+        });
+
+        if (!createResponse.ok) {
+          throw new Error("Failed to save translation");
+        }
+
+        const data = await createResponse.json();
+        setTranslations((prev) => [...prev, data.translation]);
+      } catch (error) {
+        console.error("Error translating selection:", error);
+      }
+    },
+    [
+      getSelectionOffsets,
+      handleTranslationToggle,
+      paper.id,
+      translationLanguage,
+      translations,
+    ],
+  );
 
   const handleV3AskImage = useCallback((imageData: string, page: number) => {
     setImageContext({ imageData, page });
@@ -294,6 +511,7 @@ export function PaperReader({ paper, pdfUrl }: PaperReaderProps) {
           pdfUrl={pdfUrl}
           paperId={paper.id}
           highlights={highlights}
+          translations={translations}
           activeCitation={activeCitation}
           textItemsMap={textItemsMap}
           onHighlightCreate={handleV3HighlightCreate}
@@ -303,6 +521,10 @@ export function PaperReader({ paper, pdfUrl }: PaperReaderProps) {
           onAskImage={handleV3AskImage}
           onPageChange={setCurrentPage}
           scrollToHighlightRef={scrollToHighlightRef}
+          onTranslationToggle={handleTranslationToggle}
+          translationLanguage={translationLanguage}
+          translationLanguageOptions={TRANSLATION_LANGUAGES}
+          onTranslationLanguageChange={setTranslationLanguage}
         />
       </div>
 

@@ -1,24 +1,24 @@
-Demarre l'environnement de developpement DeepRead.
+Demarre l'environnement de developpement reviewxiv.
 
 ## Instructions
 
 1. **Verifie les dependances**
    ```bash
    # Backend
-   cd deepread-api && pip install -r requirements.txt 2>/dev/null || echo "requirements.txt manquant"
+   cd reviewxiv-api && pip install -r requirements.txt 2>/dev/null || echo "requirements.txt manquant"
 
    # Frontend
-   cd deepread-app && npm install 2>/dev/null || echo "package.json manquant"
+   cd reviewxiv-app && npm install 2>/dev/null || echo "package.json manquant"
    ```
 
 2. **Demarre les serveurs**
    - Backend (port 8000) :
      ```bash
-     cd deepread-api && uvicorn main:app --reload &
+     cd reviewxiv-api && uvicorn main:app --reload &
      ```
    - Frontend (port 5173) :
      ```bash
-     cd deepread-app && npm run dev &
+     cd reviewxiv-app && npm run dev &
      ```
 
 3. **Verifie que tout fonctionne**
