@@ -266,6 +266,14 @@ function HighlightContainer({
   const { highlight, isScrolledTo } =
     useHighlightContainerContext<ViewerHighlight>();
 
+  const handleClick = useCallback(
+    (event: MouseEvent) => {
+      event.stopPropagation();
+      onHighlightClick?.(highlight.id);
+    },
+    [highlight.id, onHighlightClick],
+  );
+
   if (isTranslationHighlight(highlight)) {
     return (
       <TranslationOverlay
@@ -276,14 +284,6 @@ function HighlightContainer({
   }
   // Cast to access color property - need unknown intermediate cast due to type differences
   const coloredHighlight = highlight as unknown as ColoredHighlight;
-
-  const handleClick = useCallback(
-    (event: MouseEvent) => {
-      event.stopPropagation();
-      onHighlightClick?.(highlight.id);
-    },
-    [highlight.id, onHighlightClick],
-  );
 
   // Check if it's an area highlight (has image content)
   if (highlight.content?.image) {

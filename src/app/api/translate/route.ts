@@ -47,21 +47,24 @@ Output ONLY the translated text, nothing else. No explanations, no quotes around
 ${text}`;
 
     // Call LLM
-    const llmResponse = await fetch(
-      `${process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"}/api/llm`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          messages: [
-            { role: "system", content: systemPrompt },
-            { role: "user", content: userPrompt },
-          ],
-          temperature: 0.3,
-          max_tokens: 4096,
-        }),
+    const llmUrl = new URL("/api/llm", request.url);
+    const requestCookies = request.headers.get("cookie");
+
+    const llmResponse = await fetch(llmUrl, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...(requestCookies ? { cookie: requestCookies } : {}),
       },
-    );
+      body: JSON.stringify({
+        messages: [
+          { role: "system", content: systemPrompt },
+          { role: "user", content: userPrompt },
+        ],
+        temperature: 0.3,
+        max_tokens: 4096,
+      }),
+    });
 
     if (!llmResponse.ok) {
       const error = await llmResponse.json();

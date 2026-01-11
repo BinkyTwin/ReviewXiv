@@ -9,6 +9,8 @@ This file tracks main tasks completed by AI agents. Only significant changes are
 FEATURE: Add inline translation overlays in the PDFHighlighter viewer
 FEATURE: Save translated selections with target language control
 FIX: Use viewport highlight coordinates for translation overlays
+FIX: Use request origin and cookies for translate -> llm internal calls
+FIX: Avoid conditional hook usage in PDFHighlighterViewer highlight container
 
 ## 2026-01-03
 
