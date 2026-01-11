@@ -206,8 +206,9 @@ function TranslationOverlay({ highlight, onToggle }: TranslationOverlayProps) {
     <>
       <div
         className={cn(
+          "translation-overlay-content", // Marker class for CSS :has()
           "absolute rounded-sm transition-all duration-200 cursor-pointer overflow-hidden",
-          showTranslation ? "pointer-events-auto" : "pointer-events-none",
+          showTranslation ? "pointer-events-auto translation-active" : "pointer-events-none",
           showTranslation ? "opacity-100 scale-100" : "opacity-0 scale-[0.98]",
           "z-[99999] isolate mix-blend-normal apple-shadow hover:shadow-lg hover:ring-1 hover:ring-primary/20",
           "!bg-white dark:!bg-zinc-950", // Force solid background
@@ -226,6 +227,19 @@ function TranslationOverlay({ highlight, onToggle }: TranslationOverlayProps) {
             : "Cliquez pour voir la traduction"
         }
       >
+        <style jsx global>{`
+          /* Force the parent Highlight wrapper to not multiply when translation is active */
+          div:has(> .translation-overlay-content.translation-active) {
+            mix-blend-mode: normal !important;
+            z-index: 50 !important;
+          }
+          /* Fallback for library wrapper class if it exists */
+          .Highlight:has(.translation-overlay-content.translation-active) {
+            mix-blend-mode: normal !important;
+            z-index: 50 !important;
+          }
+        `}</style>
+
         {/* Background layer to ensure complete masking */}
         <div className="absolute inset-0 bg-white dark:bg-zinc-950" />
 
