@@ -3,9 +3,14 @@
 .env.local
 .env.*.local
 
-# Claude Code - Local settings only (shared config is tracked)
-.claude/settings.local.json
+# Claude Code
+.claude/
+CLAUDE.md
 CLAUDE.local.md
+
+# Codex
+.codex/
+AGENTS.md
 
 # Python
 __pycache__/

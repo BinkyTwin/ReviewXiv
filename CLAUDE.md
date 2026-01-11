@@ -8,7 +8,7 @@ Objectif : importer un PDF, le lire, surligner, discuter, traduire, avec des cit
 
 1. **Always use Context7** when I need code generation, setup or configuration steps, or library/API documentation.
 2. **Follow EPCP workflow** (Explore -> Plan -> Code -> Commit) for any feature or bug fix.
-3. **Use Supabase MCP** for database operations - never write raw SQL without explaining first.
+3. **Use Supabase CLI** for database operations (`supabase` command) - never use MCP.
 4. **Use GitHub CLI** (gh) for issues and PRs when available.
 5. **TodoList** : regarde toujours `.claude/productbacklog.md`, si la tâche y figure, marque-la comme faite quand terminée. Si elle n'y figure pas, ajoute-la.
 6. **CHANGELOG** : Après CHAQUE modification de code, mets à jour `CHANGELOG.md` avec le format approprié (FIX:, FEATURE:, REFACTOR:, etc.)
