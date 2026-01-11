@@ -8,7 +8,6 @@ import type {
   PdfHighlighterUtils,
   PdfSelection,
   GhostHighlight,
-  ViewportHighlight,
 } from "react-pdf-highlighter-extended";
 import {
   PdfLoader,
@@ -24,26 +23,15 @@ import type {
   HighlightColor,
   HighlightRect,
 } from "@/types/highlight";
-import type {
-  InlineTranslation,
-  TranslationSelection,
-} from "@/types/translation";
+import type { TranslationSelection } from "@/types/translation";
 import type { PDFHighlighterViewerProps, PageDimensionsMap } from "./types";
 import { HighlightTip } from "./HighlightTip";
 import { AreaSelectionTip } from "./AreaSelectionTip";
 import { CitationFlash } from "./CitationFlash";
 import { ZoomToolbar } from "./ZoomToolbar";
+import { TranslationLayer } from "./TranslationLayer";
 import { offsetsToRects } from "@/lib/highlight-renderer";
 import { cn } from "@/lib/utils";
-
-// Map ReviewXiv colors to highlight classes
-const HIGHLIGHT_CLASSES: Record<HighlightColor, string> = {
-  yellow: "highlight-yellow",
-  green: "highlight-green",
-  blue: "highlight-blue",
-  red: "highlight-red",
-  purple: "highlight-purple",
-};
 
 const ZOOM_STEP = 0.1;
 const MIN_ZOOM = 0.5;
@@ -53,18 +41,6 @@ const MAX_ZOOM = 1.5;
 interface ColoredHighlight extends Highlight {
   color?: HighlightColor;
 }
-
-interface TranslationHighlight extends Highlight {
-  kind: "translation";
-  translation: InlineTranslation;
-}
-
-type ViewerHighlight = ColoredHighlight | TranslationHighlight;
-
-const isTranslationHighlight = (
-  highlight: ViewportHighlight<ViewerHighlight>,
-): highlight is ViewportHighlight<TranslationHighlight> =>
-  "kind" in highlight && highlight.kind === "translation";
 
 // Loading spinner component
 function LoadingSpinner() {
@@ -121,245 +97,14 @@ function supabaseToExtendedHighlight(
   };
 }
 
-function translationToExtendedHighlight(
-  translation: InlineTranslation,
-  pageDimensions: PageDimensionsMap,
-): TranslationHighlight | null {
-  const pageDim = pageDimensions.get(translation.pageNumber);
-  if (!pageDim || translation.rects.length === 0) return null;
-
-  const rects = translation.rects.map((rect) => ({
-    pageNumber: translation.pageNumber,
-    x1: rect.x * pageDim.width,
-    y1: rect.y * pageDim.height,
-    x2: (rect.x + rect.width) * pageDim.width,
-    y2: (rect.y + rect.height) * pageDim.height,
-    width: pageDim.width,
-    height: pageDim.height,
-  }));
-
-  const x1 = Math.min(...rects.map((r) => r.x1));
-  const y1 = Math.min(...rects.map((r) => r.y1));
-  const x2 = Math.max(...rects.map((r) => r.x2));
-  const y2 = Math.max(...rects.map((r) => r.y2));
-
-  return {
-    id: translation.id,
-    position: {
-      boundingRect: {
-        pageNumber: translation.pageNumber,
-        x1,
-        y1,
-        x2,
-        y2,
-        width: pageDim.width,
-        height: pageDim.height,
-      },
-      rects,
-    },
-    content: {
-      text: translation.sourceText,
-    },
-    kind: "translation",
-    translation,
-  };
-}
-
 // Highlight container component - renders each highlight
 interface HighlightContainerProps {
   onHighlightClick?: (highlightId: string) => void;
-  onTranslationToggle?: (translationId: string, nextActive: boolean) => void;
 }
 
-interface TranslationOverlayProps {
-  highlight: ViewportHighlight<TranslationHighlight>;
-  onToggle?: (translationId: string, nextActive: boolean) => void;
-}
-
-function TranslationOverlay({ highlight, onToggle }: TranslationOverlayProps) {
-  const { translation } = highlight;
-  const { boundingRect } = highlight.position;
-  const rects = highlight.position.rects;
-
-  if (boundingRect.width <= 0 || boundingRect.height <= 0) {
-    return null;
-  }
-
-  const averageRectHeight =
-    rects.length > 0
-      ? rects.reduce((sum, rect) => sum + rect.height, 0) / rects.length
-      : boundingRect.height;
-  const fontSize = Math.max(10, Math.min(16, averageRectHeight * 0.85));
-  const lineHeight = Math.max(fontSize * 1.3, averageRectHeight);
-  const showTranslation = translation.isActive;
-  const badgeLabel = translation.targetLanguage.toUpperCase().slice(0, 2);
-
-  const handleToggle = (event: MouseEvent) => {
-    event.stopPropagation();
-    onToggle?.(translation.id, !translation.isActive);
-  };
-
-  // Extra padding to fully cover original text (accounts for font variations)
-  const coverBleed = 4;
-
-  // When NOT showing translation, render a minimal toggle-only element
-  if (!showTranslation) {
-    return (
-      <button
-        type="button"
-        onClick={handleToggle}
-        className={cn(
-          "absolute flex h-5 w-5 items-center justify-center",
-          "rounded-full text-[9px] font-semibold",
-          "pointer-events-auto transition-all duration-200 hover:scale-110 active:scale-95",
-          "bg-primary/10 text-primary border border-primary/30 hover:bg-primary/20",
-        )}
-        style={{
-          left: boundingRect.left + boundingRect.width - 10,
-          top: boundingRect.top - 2,
-          zIndex: 100,
-        }}
-        title="Afficher la traduction"
-      >
-        {badgeLabel}
-      </button>
-    );
-  }
-
-  // When showing translation, render a fully opaque overlay that masks original text
-  return (
-    <>
-      {/*
-        Global styles to neutralize parent blend modes from react-pdf-highlighter.
-        The library wraps highlights in containers that use mix-blend-mode: multiply,
-        which makes backgrounds semi-transparent. We need to force normal blend mode.
-      */}
-      <style>{`
-        .translation-overlay-wrapper,
-        .translation-overlay-wrapper * {
-          mix-blend-mode: normal !important;
-        }
-        /* Target the library's Highlight container when it wraps our translation */
-        .Highlight:has(.translation-overlay-wrapper) {
-          mix-blend-mode: normal !important;
-          isolation: isolate !important;
-          z-index: 9999 !important;
-        }
-        /* Also target any parent divs that might have blend modes */
-        div:has(> .translation-overlay-wrapper) {
-          mix-blend-mode: normal !important;
-          isolation: isolate !important;
-        }
-      `}</style>
-
-      {/* Main overlay container - uses multiple techniques for opacity */}
-      <div
-        className="translation-overlay-wrapper"
-        style={{
-          position: "absolute",
-          left: boundingRect.left - coverBleed,
-          top: boundingRect.top - coverBleed,
-          width: boundingRect.width + coverBleed * 2,
-          minHeight: boundingRect.height + coverBleed * 2,
-          zIndex: 99999,
-          isolation: "isolate",
-          mixBlendMode: "normal",
-          // Use box-shadow to create an "extended" background that covers any gaps
-          boxShadow: "0 0 0 2px #fafafa, 0 2px 8px rgba(0,0,0,0.08)",
-          borderRadius: "4px",
-          cursor: "pointer",
-          pointerEvents: "auto",
-        }}
-        onClick={handleToggle}
-        title="Cliquez pour voir l'original"
-      >
-        {/* Layer 1: Solid opaque background using inline style (highest priority) */}
-        <div
-          style={{
-            position: "absolute",
-            inset: 0,
-            backgroundColor: "#fafafa",
-            borderRadius: "4px",
-            zIndex: 1,
-          }}
-        />
-
-        {/* Layer 2: Additional background for dark mode support */}
-        <div
-          className="dark:bg-zinc-900"
-          style={{
-            position: "absolute",
-            inset: 0,
-            backgroundColor: "#fafafa",
-            borderRadius: "4px",
-            zIndex: 2,
-          }}
-        />
-
-        {/* Layer 3: Content */}
-        <div
-          style={{
-            position: "relative",
-            zIndex: 3,
-            padding: "4px 6px",
-            color: "#1a1a1a",
-            fontSize: `${fontSize}px`,
-            lineHeight: `${lineHeight}px`,
-            fontWeight: 450,
-            letterSpacing: "-0.01em",
-            fontFamily: "system-ui, -apple-system, sans-serif",
-            whiteSpace: "pre-wrap",
-            wordBreak: "break-word",
-          }}
-          className="dark:text-zinc-100"
-        >
-          {translation.translatedText}
-        </div>
-
-        {/* Border decoration */}
-        <div
-          style={{
-            position: "absolute",
-            inset: 0,
-            borderRadius: "4px",
-            border: "1px solid rgba(0, 0, 0, 0.06)",
-            pointerEvents: "none",
-            zIndex: 4,
-          }}
-          className="dark:border-zinc-700/50"
-        />
-      </div>
-
-      {/* Toggle button positioned outside the overlay */}
-      <button
-        type="button"
-        onClick={handleToggle}
-        className={cn(
-          "absolute flex h-6 w-6 items-center justify-center",
-          "rounded-full text-[10px] font-bold shadow-md",
-          "pointer-events-auto transition-all duration-200 hover:scale-110 active:scale-95",
-          "bg-primary text-primary-foreground border-2 border-white dark:border-zinc-800",
-        )}
-        style={{
-          left: boundingRect.left + boundingRect.width + coverBleed,
-          top: boundingRect.top - coverBleed,
-          transform: "translate(-50%, -50%)",
-          zIndex: 100000,
-        }}
-        title="Voir l'original"
-      >
-        {badgeLabel}
-      </button>
-    </>
-  );
-}
-
-function HighlightContainer({
-  onHighlightClick,
-  onTranslationToggle,
-}: HighlightContainerProps) {
+function HighlightContainer({ onHighlightClick }: HighlightContainerProps) {
   const { highlight, isScrolledTo } =
-    useHighlightContainerContext<ViewerHighlight>();
+    useHighlightContainerContext<ColoredHighlight>();
 
   const handleClick = useCallback(
     (event: MouseEvent) => {
@@ -369,14 +114,6 @@ function HighlightContainer({
     [highlight.id, onHighlightClick],
   );
 
-  if (isTranslationHighlight(highlight)) {
-    return (
-      <TranslationOverlay
-        highlight={highlight}
-        onToggle={onTranslationToggle}
-      />
-    );
-  }
   // Cast to access color property - need unknown intermediate cast due to type differences
   const coloredHighlight = highlight as unknown as ColoredHighlight;
 
@@ -529,7 +266,7 @@ interface PdfHighlighterInnerProps {
   pdfDocument: PDFDocumentProxy;
   areaSelectionMode: boolean;
   scaleValue: "page-width" | number;
-  viewerHighlights: ViewerHighlight[];
+  viewerHighlights: ColoredHighlight[];
   highlighterUtilsRef: React.MutableRefObject<PdfHighlighterUtils | undefined>;
   onPageDimensionsChange: (dimensions: PageDimensionsMap) => void;
   onViewerReady: () => void;
@@ -543,7 +280,6 @@ interface PdfHighlighterInnerProps {
     page: number,
     position: { x: number; y: number; width: number; height: number },
   ) => void;
-  onTranslationToggle?: (translationId: string, nextActive: boolean) => void;
 }
 
 function PdfHighlighterInner({
@@ -560,7 +296,6 @@ function PdfHighlighterInner({
   onTranslateSelection,
   onAskImage,
   onAreaHighlightCreate,
-  onTranslationToggle,
 }: PdfHighlighterInnerProps) {
   // Store current selection ref for highlight creation
   const currentSelectionRef = useRef<PdfSelection | null>(null);
@@ -663,10 +398,7 @@ function PdfHighlighterInner({
       }
       style={{ height: "100%", width: "100%", position: "absolute" }}
     >
-      <HighlightContainer
-        onHighlightClick={onHighlightClick}
-        onTranslationToggle={onTranslationToggle}
-      />
+      <HighlightContainer onHighlightClick={onHighlightClick} />
     </PdfHighlighter>
   );
 }
@@ -754,7 +486,7 @@ export function PDFHighlighterViewer({
     return Number.isFinite(nextScale) ? nextScale : "page-width";
   }, [fitScale, zoomLevel, viewerReady]);
 
-  // Convert highlights to extended format
+  // Convert highlights to extended format (translations are rendered separately via TranslationLayer)
   const extendedHighlights = useMemo(() => {
     if (!viewerReady || pageDimensionsMap.size === 0) return [];
     return highlights
@@ -762,17 +494,11 @@ export function PDFHighlighterViewer({
       .filter((h): h is ColoredHighlight => h !== null);
   }, [highlights, pageDimensionsMap, viewerReady]);
 
-  const translationHighlights = useMemo(() => {
-    if (!viewerReady || pageDimensionsMap.size === 0) return [];
-    return translations
-      .map((t) => translationToExtendedHighlight(t, pageDimensionsMap))
-      .filter((t): t is TranslationHighlight => t !== null);
-  }, [translations, pageDimensionsMap, viewerReady]);
-
-  const viewerHighlights = useMemo<ViewerHighlight[]>(
-    () => [...extendedHighlights, ...translationHighlights],
-    [extendedHighlights, translationHighlights],
-  );
+  // Calculate scale for TranslationLayer positioning
+  const currentScale = useMemo(() => {
+    if (typeof scaleValue === "number") return scaleValue;
+    return fitScale ?? 1;
+  }, [scaleValue, fitScale]);
 
   const zoomEnabled = Boolean(fitScale);
   const canZoomIn = zoomLevel < MAX_ZOOM - 0.001;
@@ -934,7 +660,7 @@ export function PDFHighlighterViewer({
               pdfDocument={pdfDocument}
               areaSelectionMode={areaSelectionMode}
               scaleValue={scaleValue}
-              viewerHighlights={viewerHighlights}
+              viewerHighlights={extendedHighlights}
               highlighterUtilsRef={highlighterUtilsRef}
               onPageDimensionsChange={handlePageDimensionsChange}
               onViewerReady={handleViewerReady}
@@ -944,7 +670,6 @@ export function PDFHighlighterViewer({
               onTranslateSelection={onTranslateSelection}
               onAskImage={onAskImage}
               onAreaHighlightCreate={onAreaHighlightCreate}
-              onTranslationToggle={onTranslationToggle}
             />
           )}
         </PdfLoader>
@@ -952,6 +677,16 @@ export function PDFHighlighterViewer({
 
       {/* Loading spinner while mounting */}
       {!isMounted && <LoadingSpinner />}
+
+      {/* Translation Layer - rendered OUTSIDE react-pdf-highlighter for guaranteed opacity */}
+      {viewerReady && translations.length > 0 && (
+        <TranslationLayer
+          translations={translations}
+          pageDimensions={pageDimensionsMap}
+          scale={currentScale}
+          onToggle={onTranslationToggle}
+        />
+      )}
 
       {/* Citation flash overlay */}
       {citationFlash && (
