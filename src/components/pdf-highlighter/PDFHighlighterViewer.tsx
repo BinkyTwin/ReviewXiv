@@ -189,8 +189,8 @@ function TranslationOverlay({ highlight, onToggle }: TranslationOverlayProps) {
     rects.length > 0
       ? rects.reduce((sum, rect) => sum + rect.height, 0) / rects.length
       : boundingRect.height;
-  const fontSize = Math.max(9, Math.min(16, averageRectHeight * 0.9));
-  const lineHeight = Math.max(fontSize, averageRectHeight);
+  const fontSize = Math.max(10, Math.min(16, averageRectHeight * 0.85));
+  const lineHeight = Math.max(fontSize * 1.3, averageRectHeight);
   const showTranslation = translation.isActive;
   const badgeLabel = translation.targetLanguage.toUpperCase().slice(0, 2);
 
@@ -199,98 +199,154 @@ function TranslationOverlay({ highlight, onToggle }: TranslationOverlayProps) {
     onToggle?.(translation.id, !translation.isActive);
   };
 
-  // Calculate a slightly larger bounding box to ensure original text is fully covered
-  const coverBleed = 3; // px bleed
+  // Extra padding to fully cover original text (accounts for font variations)
+  const coverBleed = 4;
 
-  return (
-    <>
-      <div
-        className={cn(
-          "translation-overlay-content", // Marker class for CSS :has()
-          "absolute rounded-sm transition-all duration-200 cursor-pointer overflow-hidden",
-          showTranslation ? "pointer-events-auto translation-active" : "pointer-events-none",
-          showTranslation ? "opacity-100 scale-100" : "opacity-0 scale-[0.98]",
-          "z-[99999] isolate mix-blend-normal apple-shadow hover:shadow-lg hover:ring-1 hover:ring-primary/20",
-          "!bg-white dark:!bg-zinc-950", // Force solid background
-        )}
-        style={{
-          left: boundingRect.left - coverBleed,
-          top: boundingRect.top - coverBleed,
-          width: boundingRect.width + coverBleed * 2,
-          height: boundingRect.height + coverBleed * 2,
-          opacity: showTranslation ? 1 : 0, // Extra safety for opacity
-        }}
-        onClick={handleToggle}
-        title={
-          showTranslation
-            ? "Cliquez pour voir l'original"
-            : "Cliquez pour voir la traduction"
-        }
-      >
-        <style jsx global>{`
-          /* Force the parent Highlight wrapper to not multiply when translation is active */
-          div:has(> .translation-overlay-content.translation-active) {
-            mix-blend-mode: normal !important;
-            z-index: 50 !important;
-          }
-          /* Fallback for library wrapper class if it exists */
-          .Highlight:has(.translation-overlay-content.translation-active) {
-            mix-blend-mode: normal !important;
-            z-index: 50 !important;
-          }
-        `}</style>
-
-        {/* Background layer to ensure complete masking */}
-        <div className="absolute inset-0 bg-white dark:bg-zinc-950" />
-
-        {/* Text content with improved typography */}
-        <div
-          className={cn(
-            "relative px-1 py-0.5 text-zinc-800 dark:text-zinc-100 transition-opacity duration-200",
-            "whitespace-pre-wrap select-text font-sans antialiased",
-            showTranslation ? "opacity-100" : "opacity-0",
-          )}
-          style={{
-            fontSize,
-            lineHeight: `${lineHeight}px`,
-            fontWeight: 450, // Slightly bolder for better readability on light BG
-            letterSpacing: "-0.01em"
-          }}
-        >
-          {translation.translatedText}
-        </div>
-
-        {/* Decorative border */}
-        {showTranslation && (
-          <div className="absolute inset-0 rounded-sm border border-primary/10 pointer-events-none" />
-        )}
-
-        {/* Subtle indicator of translated content */}
-        {showTranslation && (
-          <div className="absolute bottom-0 right-1 text-[7px] text-primary/30 uppercase font-bold tracking-widest select-none pointer-events-none">
-            Translated
-          </div>
-        )}
-      </div>
-
-      {/* Floating toggle button with improved UX */}
+  // When NOT showing translation, render a minimal toggle-only element
+  if (!showTranslation) {
+    return (
       <button
         type="button"
         onClick={handleToggle}
         className={cn(
-          "absolute z-30 flex h-6 w-6 items-center justify-center",
-          "rounded-full border border-border/50 text-[10px] font-bold shadow-md",
+          "absolute flex h-5 w-5 items-center justify-center",
+          "rounded-full text-[9px] font-semibold",
           "pointer-events-auto transition-all duration-200 hover:scale-110 active:scale-95",
-          showTranslation
-            ? "bg-primary text-primary-foreground border-primary"
-            : "bg-white/90 backdrop-blur-sm text-zinc-600 border-zinc-200 hover:bg-white",
+          "bg-primary/10 text-primary border border-primary/30 hover:bg-primary/20",
         )}
         style={{
-          left: boundingRect.left + boundingRect.width,
-          top: boundingRect.top,
-          transform: "translate(-50%, -50%)",
+          left: boundingRect.left + boundingRect.width - 10,
+          top: boundingRect.top - 2,
+          zIndex: 100,
         }}
-        title={showTranslation ? "Voir l'original" : "Traduire cette section"}
+        title="Afficher la traduction"
+      >
+        {badgeLabel}
+      </button>
+    );
+  }
+
+  // When showing translation, render a fully opaque overlay that masks original text
+  return (
+    <>
+      {/*
+        Global styles to neutralize parent blend modes from react-pdf-highlighter.
+        The library wraps highlights in containers that use mix-blend-mode: multiply,
+        which makes backgrounds semi-transparent. We need to force normal blend mode.
+      */}
+      <style>{`
+        .translation-overlay-wrapper,
+        .translation-overlay-wrapper * {
+          mix-blend-mode: normal !important;
+        }
+        /* Target the library's Highlight container when it wraps our translation */
+        .Highlight:has(.translation-overlay-wrapper) {
+          mix-blend-mode: normal !important;
+          isolation: isolate !important;
+          z-index: 9999 !important;
+        }
+        /* Also target any parent divs that might have blend modes */
+        div:has(> .translation-overlay-wrapper) {
+          mix-blend-mode: normal !important;
+          isolation: isolate !important;
+        }
+      `}</style>
+
+      {/* Main overlay container - uses multiple techniques for opacity */}
+      <div
+        className="translation-overlay-wrapper"
+        style={{
+          position: "absolute",
+          left: boundingRect.left - coverBleed,
+          top: boundingRect.top - coverBleed,
+          width: boundingRect.width + coverBleed * 2,
+          minHeight: boundingRect.height + coverBleed * 2,
+          zIndex: 99999,
+          isolation: "isolate",
+          mixBlendMode: "normal",
+          // Use box-shadow to create an "extended" background that covers any gaps
+          boxShadow: "0 0 0 2px #fafafa, 0 2px 8px rgba(0,0,0,0.08)",
+          borderRadius: "4px",
+          cursor: "pointer",
+          pointerEvents: "auto",
+        }}
+        onClick={handleToggle}
+        title="Cliquez pour voir l'original"
+      >
+        {/* Layer 1: Solid opaque background using inline style (highest priority) */}
+        <div
+          style={{
+            position: "absolute",
+            inset: 0,
+            backgroundColor: "#fafafa",
+            borderRadius: "4px",
+            zIndex: 1,
+          }}
+        />
+
+        {/* Layer 2: Additional background for dark mode support */}
+        <div
+          className="dark:bg-zinc-900"
+          style={{
+            position: "absolute",
+            inset: 0,
+            backgroundColor: "#fafafa",
+            borderRadius: "4px",
+            zIndex: 2,
+          }}
+        />
+
+        {/* Layer 3: Content */}
+        <div
+          style={{
+            position: "relative",
+            zIndex: 3,
+            padding: "4px 6px",
+            color: "#1a1a1a",
+            fontSize: `${fontSize}px`,
+            lineHeight: `${lineHeight}px`,
+            fontWeight: 450,
+            letterSpacing: "-0.01em",
+            fontFamily: "system-ui, -apple-system, sans-serif",
+            whiteSpace: "pre-wrap",
+            wordBreak: "break-word",
+          }}
+          className="dark:text-zinc-100"
+        >
+          {translation.translatedText}
+        </div>
+
+        {/* Border decoration */}
+        <div
+          style={{
+            position: "absolute",
+            inset: 0,
+            borderRadius: "4px",
+            border: "1px solid rgba(0, 0, 0, 0.06)",
+            pointerEvents: "none",
+            zIndex: 4,
+          }}
+          className="dark:border-zinc-700/50"
+        />
+      </div>
+
+      {/* Toggle button positioned outside the overlay */}
+      <button
+        type="button"
+        onClick={handleToggle}
+        className={cn(
+          "absolute flex h-6 w-6 items-center justify-center",
+          "rounded-full text-[10px] font-bold shadow-md",
+          "pointer-events-auto transition-all duration-200 hover:scale-110 active:scale-95",
+          "bg-primary text-primary-foreground border-2 border-white dark:border-zinc-800",
+        )}
+        style={{
+          left: boundingRect.left + boundingRect.width + coverBleed,
+          top: boundingRect.top - coverBleed,
+          transform: "translate(-50%, -50%)",
+          zIndex: 100000,
+        }}
+        title="Voir l'original"
       >
         {badgeLabel}
       </button>
@@ -330,7 +386,7 @@ function HighlightContainer({
       <AreaHighlight
         highlight={highlight}
         isScrolledTo={isScrolledTo}
-        onChange={() => { }}
+        onChange={() => {}}
         bounds="parent"
       />
     );
@@ -398,25 +454,25 @@ function SelectionTipWrapper({
         onSave={
           onAreaHighlightCreate
             ? () => {
-              const { x1, y1, x2, y2 } = selection.position.boundingRect;
-              onAreaHighlightCreate(
-                selection.content.image!,
-                selection.position.boundingRect.pageNumber,
-                { x: x1, y: y1, width: x2 - x1, height: y2 - y1 },
-              );
-              handleDismiss();
-            }
+                const { x1, y1, x2, y2 } = selection.position.boundingRect;
+                onAreaHighlightCreate(
+                  selection.content.image!,
+                  selection.position.boundingRect.pageNumber,
+                  { x: x1, y: y1, width: x2 - x1, height: y2 - y1 },
+                );
+                handleDismiss();
+              }
             : undefined
         }
         onAsk={
           onAskImage
             ? () => {
-              onAskImage(
-                selection.content.image!,
-                selection.position.boundingRect.pageNumber,
-              );
-              handleDismiss();
-            }
+                onAskImage(
+                  selection.content.image!,
+                  selection.position.boundingRect.pageNumber,
+                );
+                handleDismiss();
+              }
             : undefined
         }
         onDismiss={handleDismiss}
@@ -436,31 +492,31 @@ function SelectionTipWrapper({
       onAsk={
         onAskSelection
           ? () => {
-            onAskSelection(
-              selection.content?.text || "",
-              selection.position.boundingRect.pageNumber,
-            );
-            handleDismiss();
-          }
+              onAskSelection(
+                selection.content?.text || "",
+                selection.position.boundingRect.pageNumber,
+              );
+              handleDismiss();
+            }
           : undefined
       }
       onTranslate={
         onTranslateSelection
           ? () => {
-            const rects = selection.position.rects.map((rect) => ({
-              x: rect.x1 / rect.width,
-              y: rect.y1 / rect.height,
-              width: (rect.x2 - rect.x1) / rect.width,
-              height: (rect.y2 - rect.y1) / rect.height,
-            }));
+              const rects = selection.position.rects.map((rect) => ({
+                x: rect.x1 / rect.width,
+                y: rect.y1 / rect.height,
+                width: (rect.x2 - rect.x1) / rect.width,
+                height: (rect.y2 - rect.y1) / rect.height,
+              }));
 
-            onTranslateSelection({
-              text: selection.content?.text || "",
-              pageNumber: selection.position.boundingRect.pageNumber,
-              rects,
-            });
-            handleDismiss();
-          }
+              onTranslateSelection({
+                text: selection.content?.text || "",
+                pageNumber: selection.position.boundingRect.pageNumber,
+                rects,
+              });
+              handleDismiss();
+            }
           : undefined
       }
       onDismiss={handleDismiss}

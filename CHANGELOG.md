@@ -6,6 +6,13 @@ This file tracks main tasks completed by AI agents. Only significant changes are
 
 ## 2026-01-11
 
+FIX: Complete rework of translation overlay to properly mask original text
+  - Use multiple background layers with inline styles for guaranteed opacity
+  - Add CSS rules to neutralize parent mix-blend-mode from react-pdf-highlighter
+  - Use isolation context and z-index stacking to prevent text bleed-through
+  - Separate render paths for active vs inactive states
+  - Add box-shadow border for extended coverage
+
 FEATURE: Add inline translation overlays in the PDFHighlighter viewer
 FEATURE: Save translated selections with target language control
 FIX: Use viewport highlight coordinates for translation overlays
