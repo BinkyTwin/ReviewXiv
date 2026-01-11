@@ -200,7 +200,7 @@ function TranslationOverlay({ highlight, onToggle }: TranslationOverlayProps) {
   };
 
   // Calculate a slightly larger bounding box to ensure original text is fully covered
-  const coverBleed = 2; // px bleed
+  const coverBleed = 3; // px bleed
 
   return (
     <>
@@ -209,14 +209,15 @@ function TranslationOverlay({ highlight, onToggle }: TranslationOverlayProps) {
           "absolute rounded-sm transition-all duration-200 cursor-pointer overflow-hidden",
           showTranslation ? "pointer-events-auto" : "pointer-events-none",
           showTranslation ? "opacity-100 scale-100" : "opacity-0 scale-[0.98]",
-          "z-20 apple-shadow hover:shadow-lg hover:ring-1 hover:ring-primary/20",
-          "bg-white dark:bg-zinc-950", // Use a solid background to mask perfectly
+          "z-[100] apple-shadow hover:shadow-lg hover:ring-1 hover:ring-primary/20",
+          "!bg-white dark:!bg-zinc-950", // Force solid background
         )}
         style={{
           left: boundingRect.left - coverBleed,
           top: boundingRect.top - coverBleed,
           width: boundingRect.width + coverBleed * 2,
           height: boundingRect.height + coverBleed * 2,
+          opacity: showTranslation ? 1 : 0, // Extra safety for opacity
         }}
         onClick={handleToggle}
         title={
