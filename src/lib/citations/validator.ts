@@ -1,7 +1,17 @@
-import type { Citation, CitationValidationResult } from "@/types/citation";
+import type {
+  Citation,
+  CitationValidationResult,
+  HtmlCitation,
+  PdfCitation,
+} from "@/types/citation";
 
 interface PageText {
   pageNumber: number;
+  textContent: string;
+}
+
+interface SectionText {
+  sectionId: string;
   textContent: string;
 }
 
@@ -12,67 +22,16 @@ interface PageText {
 export function validateCitation(
   citation: Citation,
   pages: PageText[],
+  sections?: SectionText[],
 ): CitationValidationResult {
-  // Find the page
-  const page = pages.find((p) => p.pageNumber === citation.page);
-  if (!page) {
-    return {
-      isValid: false,
-      error: `Page ${citation.page} not found`,
-    };
-  }
-
-  const text = page.textContent;
-
-  // Check bounds
-  if (
-    citation.start < 0 ||
-    citation.end > text.length ||
-    citation.start >= citation.end
-  ) {
-    // Try to find the quote in the text
-    if (citation.quote) {
-      const corrected = findQuoteInText(citation.quote, text, citation.page);
-      if (corrected) {
-        return { isValid: true, correctedCitation: corrected };
-      }
+  if (citation.format === "html" || "sectionId" in citation) {
+    if (!sections || sections.length === 0) {
+      return { isValid: false, error: "Section context not provided" };
     }
-    return {
-      isValid: false,
-      error: "Invalid offsets",
-    };
+    return validateHtmlCitation(citation as HtmlCitation, sections);
   }
 
-  // Extract actual text at these offsets
-  const actualText = text.slice(citation.start, citation.end);
-
-  // Verify the quote matches (with some tolerance)
-  if (citation.quote) {
-    const similarity = calculateSimilarity(
-      normalizeText(citation.quote),
-      normalizeText(actualText),
-    );
-
-    if (similarity > 0.7) {
-      return { isValid: true };
-    }
-
-    // Try to find the quote elsewhere in the page
-    const corrected = findQuoteInText(citation.quote, text, citation.page);
-    if (corrected) {
-      return { isValid: true, correctedCitation: corrected };
-    }
-  }
-
-  // If no quote provided but offsets are valid, accept it
-  if (!citation.quote && actualText.length > 0) {
-    return { isValid: true };
-  }
-
-  return {
-    isValid: false,
-    error: "Quote does not match text at offsets",
-  };
+  return validatePdfCitation(citation as PdfCitation, pages);
 }
 
 /**
@@ -81,11 +40,12 @@ export function validateCitation(
 export function validateCitations(
   citations: Citation[],
   pages: PageText[],
+  sections?: SectionText[],
 ): Citation[] {
   const validated: Citation[] = [];
 
   for (const citation of citations) {
-    const result = validateCitation(citation, pages);
+    const result = validateCitation(citation, pages, sections);
     if (result.isValid) {
       validated.push(result.correctedCitation || citation);
     }
@@ -95,21 +55,126 @@ export function validateCitations(
 }
 
 /**
- * Find a quote in the page text and return corrected citation
+ * Validate PDF citation against page text
+ */
+function validatePdfCitation(
+  citation: PdfCitation,
+  pages: PageText[],
+): CitationValidationResult {
+  const page = pages.find((p) => p.pageNumber === citation.page);
+  if (!page) {
+    return { isValid: false, error: `Page ${citation.page} not found` };
+  }
+
+  return validateOffsets({
+    text: page.textContent,
+    start: citation.start,
+    end: citation.end,
+    quote: citation.quote,
+    buildCitation: (start, end, quote) => ({
+      ...citation,
+      start,
+      end,
+      quote,
+      verified: true,
+    }),
+  });
+}
+
+/**
+ * Validate HTML citation against section text
+ */
+function validateHtmlCitation(
+  citation: HtmlCitation,
+  sections: SectionText[],
+): CitationValidationResult {
+  const section = sections.find((s) => s.sectionId === citation.sectionId);
+  if (!section) {
+    return {
+      isValid: false,
+      error: `Section ${citation.sectionId} not found`,
+    };
+  }
+
+  return validateOffsets({
+    text: section.textContent,
+    start: citation.start,
+    end: citation.end,
+    quote: citation.quote,
+    buildCitation: (start, end, quote) => ({
+      ...citation,
+      start,
+      end,
+      quote,
+      verified: true,
+    }),
+  });
+}
+
+interface OffsetValidationInput {
+  text: string;
+  start: number;
+  end: number;
+  quote: string;
+  buildCitation: (start: number, end: number, quote: string) => Citation;
+}
+
+function validateOffsets({
+  text,
+  start,
+  end,
+  quote,
+  buildCitation,
+}: OffsetValidationInput): CitationValidationResult {
+  if (start < 0 || end > text.length || start >= end) {
+    if (quote) {
+      const corrected = findQuoteInText(quote, text, buildCitation);
+      if (corrected) {
+        return { isValid: true, correctedCitation: corrected };
+      }
+    }
+    return { isValid: false, error: "Invalid offsets" };
+  }
+
+  const actualText = text.slice(start, end);
+
+  if (quote) {
+    const similarity = calculateSimilarity(
+      normalizeText(quote),
+      normalizeText(actualText),
+    );
+
+    if (similarity > 0.7) {
+      return { isValid: true };
+    }
+
+    const corrected = findQuoteInText(quote, text, buildCitation);
+    if (corrected) {
+      return { isValid: true, correctedCitation: corrected };
+    }
+  }
+
+  if (!quote && actualText.length > 0) {
+    return { isValid: true };
+  }
+
+  return { isValid: false, error: "Quote does not match text at offsets" };
+}
+
+/**
+ * Find a quote in the text and return corrected citation
  */
 function findQuoteInText(
   quote: string,
   text: string,
-  page: number,
+  buildCitation: (start: number, end: number, quote: string) => Citation,
 ): Citation | null {
   const normalizedQuote = normalizeText(quote);
   const normalizedText = normalizeText(text);
 
-  // Try exact match first
   let index = normalizedText.indexOf(normalizedQuote);
 
   if (index === -1) {
-    // Try finding a shorter substring
     const words = normalizedQuote.split(" ");
     if (words.length >= 3) {
       const shortQuote = words.slice(0, 5).join(" ");
@@ -121,18 +186,14 @@ function findQuoteInText(
     return null;
   }
 
-  // Map normalized index back to original text (approximate)
-  // This is a simplification - in production, use proper mapping
   const start = index;
   const end = Math.min(start + quote.length, text.length);
 
-  return {
-    page,
+  return buildCitation(
     start,
     end,
-    quote: text.slice(start, Math.min(start + 100, end)),
-    verified: true,
-  };
+    text.slice(start, Math.min(start + 100, end)),
+  );
 }
 
 /**

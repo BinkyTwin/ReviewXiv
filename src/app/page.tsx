@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { PaperUploader } from "@/components/upload/PaperUploader";
 import { ModeToggle } from "@/components/mode-toggle";
@@ -39,7 +39,10 @@ const features = [
 
 export default function Home() {
   const router = useRouter();
-  const [showUploader, setShowUploader] = useState(false);
+  const searchParams = useSearchParams();
+  const [showUploader, setShowUploader] = useState(
+    () => Boolean(searchParams.get("import")),
+  );
 
   const handleUploadComplete = (paperId: string) => {
     router.push(`/paper/${paperId}`);

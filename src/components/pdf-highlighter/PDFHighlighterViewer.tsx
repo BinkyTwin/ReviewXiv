@@ -18,11 +18,7 @@ import {
   usePdfHighlighterContext,
 } from "react-pdf-highlighter-extended";
 
-import type {
-  Highlight as SupabaseHighlight,
-  HighlightColor,
-  HighlightRect,
-} from "@/types/highlight";
+import type { PdfHighlight, HighlightColor, HighlightRect } from "@/types/highlight";
 import type { TranslationSelection } from "@/types/translation";
 import type { PDFHighlighterViewerProps, PageDimensionsMap } from "./types";
 import { HighlightTip } from "./HighlightTip";
@@ -53,7 +49,7 @@ function LoadingSpinner() {
 
 // Convert Supabase highlights to react-pdf-highlighter-extended format
 function supabaseToExtendedHighlight(
-  highlight: SupabaseHighlight,
+  highlight: PdfHighlight,
   pageDimensions: PageDimensionsMap,
 ): ColoredHighlight | null {
   const pageDim = pageDimensions.get(highlight.pageNumber);
@@ -249,6 +245,7 @@ function SelectionTipWrapper({
 
               onTranslateSelection({
                 text: selection.content?.text || "",
+                format: "pdf",
                 pageNumber: selection.position.boundingRect.pageNumber,
                 rects,
               });
@@ -443,8 +440,8 @@ export function PDFHighlighterViewer({
 
   // Mount effect
   useEffect(() => {
-    setIsMounted(true);
-    return () => setIsMounted(false);
+    const raf = window.requestAnimationFrame(() => setIsMounted(true));
+    return () => window.cancelAnimationFrame(raf);
   }, []);
 
   // Container width tracking
@@ -466,9 +463,12 @@ export function PDFHighlighterViewer({
 
   // Reset on URL change
   useEffect(() => {
-    setPageDimensionsMap(new Map());
-    setZoomLevel(1);
-    setViewerReady(false);
+    const raf = window.requestAnimationFrame(() => {
+      setPageDimensionsMap(new Map());
+      setZoomLevel(1);
+      setViewerReady(false);
+    });
+    return () => window.cancelAnimationFrame(raf);
   }, [pdfUrl]);
 
   // Calculate scale
@@ -555,31 +555,35 @@ export function PDFHighlighterViewer({
 
   // Citation flash effect
   useEffect(() => {
-    if (!activeCitation) {
-      setCitationFlash(null);
-      return;
-    }
+    const raf = window.requestAnimationFrame(() => {
+      if (!activeCitation) {
+        setCitationFlash(null);
+        return;
+      }
 
-    const pageTextItems = textItemsMap?.get(activeCitation.page);
-    if (!pageTextItems || pageTextItems.length === 0) {
-      console.warn(
-        `No text items found for page ${activeCitation.page}, cannot render citation flash`,
-      );
-      setCitationFlash(null);
-      return;
-    }
+      const pageTextItems = textItemsMap?.get(activeCitation.page);
+      if (!pageTextItems || pageTextItems.length === 0) {
+        console.warn(
+          `No text items found for page ${activeCitation.page}, cannot render citation flash`,
+        );
+        setCitationFlash(null);
+        return;
+      }
 
-    const rects = offsetsToRects(activeCitation, pageTextItems);
-    if (rects.length === 0) {
-      console.warn("No rects computed for citation, cannot render flash");
-      setCitationFlash(null);
-      return;
-    }
+      const rects = offsetsToRects(activeCitation, pageTextItems);
+      if (rects.length === 0) {
+        console.warn("No rects computed for citation, cannot render flash");
+        setCitationFlash(null);
+        return;
+      }
 
-    setCitationFlash({
-      pageNumber: activeCitation.page,
-      rects,
+      setCitationFlash({
+        pageNumber: activeCitation.page,
+        rects,
+      });
     });
+
+    return () => window.cancelAnimationFrame(raf);
   }, [activeCitation, textItemsMap]);
 
   // Handle highlight creation
@@ -592,9 +596,10 @@ export function PDFHighlighterViewer({
         height: (rect.y2 - rect.y1) / rect.height,
       }));
 
-      const tempHighlight: SupabaseHighlight = {
+      const tempHighlight: PdfHighlight = {
         id: `temp-${Date.now()}`,
         paperId,
+        format: "pdf",
         pageNumber: selection.position.boundingRect.pageNumber,
         startOffset: 0,
         endOffset: 0,

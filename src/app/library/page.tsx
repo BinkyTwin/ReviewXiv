@@ -18,10 +18,10 @@ function EmptyState() {
             <div className="w-20 h-20 rounded-3xl bg-muted flex items-center justify-center mx-auto mb-6 apple-shadow">
                 <BookOpen className="h-10 w-10 text-muted-foreground/40" />
             </div>
-            <h3 className="text-xl font-bold mb-2">Votre bibliothèque est vide</h3>
-            <p className="text-muted-foreground mb-8 max-w-sm mx-auto text-sm leading-relaxed font-medium">
-                Commencez par importer un document PDF pour commencer à lire et annoter avec l'IA.
-            </p>
+	            <h3 className="text-xl font-bold mb-2">Votre bibliothèque est vide</h3>
+	            <p className="text-muted-foreground mb-8 max-w-sm mx-auto text-sm leading-relaxed font-medium">
+	                Commencez par importer un document PDF pour commencer à lire et annoter avec l&apos;IA.
+	            </p>
             <Link href="/">
                 <Button className="rounded-full px-10 py-6 h-auto bg-primary text-primary-foreground hover:scale-105 transition-all font-bold shadow-xl">
                     <FileText className="h-5 w-5 mr-2" />
@@ -39,10 +39,10 @@ function NoResultsState() {
             <div className="w-16 h-16 rounded-3xl bg-muted flex items-center justify-center mx-auto mb-4 apple-shadow">
                 <FileText className="h-8 w-8 text-muted-foreground/40" />
             </div>
-            <h3 className="text-lg font-bold mb-2">Aucun résultat</h3>
-            <p className="text-muted-foreground text-sm">
-                Essayez d'ajuster vos filtres de recherche
-            </p>
+	            <h3 className="text-lg font-bold mb-2">Aucun résultat</h3>
+	            <p className="text-muted-foreground text-sm">
+	                Essayez d&apos;ajuster vos filtres de recherche
+	            </p>
         </div>
     );
 }
@@ -191,12 +191,23 @@ export default function LibraryPage() {
                                 </div>
                             </div>
                         </div>
-                        <Link href="/">
-                            <Button className="rounded-full bg-primary text-primary-foreground hover:scale-105 transition-all duration-300 font-bold px-10 py-6 h-auto shadow-xl">
-                                <FileText className="h-5 w-5 mr-3" />
-                                Nouveau Document
-                            </Button>
-                        </Link>
+                        <div className="flex flex-col sm:flex-row gap-3">
+                            <Link href="/?import=arxiv">
+                                <Button
+                                    variant="outline"
+                                    className="rounded-full border-border/50 bg-background/50 backdrop-blur-sm px-8 py-6 h-auto text-sm font-semibold hover:bg-muted transition-colors apple-shadow"
+                                >
+                                    <BookOpen className="h-4 w-4 mr-2 text-muted-foreground" />
+                                    Importer arXiv
+                                </Button>
+                            </Link>
+                            <Link href="/">
+                                <Button className="rounded-full bg-primary text-primary-foreground hover:scale-105 transition-all duration-300 font-bold px-10 py-6 h-auto shadow-xl">
+                                    <FileText className="h-5 w-5 mr-3" />
+                                    Nouveau Document
+                                </Button>
+                            </Link>
+                        </div>
                     </div>
                 </div>
 

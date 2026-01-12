@@ -1,19 +1,18 @@
 "use client";
 
-import { useCallback } from "react";
 import type { MouseEvent } from "react";
-import type { InlineTranslation } from "@/types/translation";
+import type { PdfInlineTranslation } from "@/types/translation";
 import type { PageDimensionsMap } from "./types";
 
 interface TranslationLayerProps {
-  translations: InlineTranslation[];
+  translations: PdfInlineTranslation[];
   pageDimensions: PageDimensionsMap;
   scale: number;
   onToggle?: (translationId: string, nextActive: boolean) => void;
 }
 
 interface SingleTranslationProps {
-  translation: InlineTranslation;
+  translation: PdfInlineTranslation;
   pageWidth: number;
   pageHeight: number;
   scale: number;
@@ -52,14 +51,11 @@ function SingleTranslation({
   const showTranslation = translation.isActive;
   const badgeLabel = translation.targetLanguage.toUpperCase().slice(0, 2);
 
-  const handleToggle = useCallback(
-    (event: MouseEvent) => {
-      event.stopPropagation();
-      event.preventDefault();
-      onToggle?.(translation.id, !translation.isActive);
-    },
-    [translation.id, translation.isActive, onToggle],
-  );
+  const handleToggle = (event: MouseEvent) => {
+    event.stopPropagation();
+    event.preventDefault();
+    onToggle?.(translation.id, !translation.isActive);
+  };
 
   // Padding to ensure full text coverage
   const padding = 4;
@@ -195,7 +191,7 @@ export function TranslationLayer({
   }
 
   // Group translations by page
-  const translationsByPage = new Map<number, InlineTranslation[]>();
+  const translationsByPage = new Map<number, PdfInlineTranslation[]>();
   for (const t of translations) {
     const pageTranslations = translationsByPage.get(t.pageNumber) || [];
     pageTranslations.push(t);

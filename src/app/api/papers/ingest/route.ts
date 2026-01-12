@@ -1,20 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { extractAllPages, chunkPageContent } from "@/lib/pdf/parser";
+import { extractAllPages } from "@/lib/pdf/parser";
+import { chunkTextContent } from "@/lib/content/parser";
 import { MAX_PDF_SIZE_BYTES, MAX_PDF_SIZE_LABEL } from "@/lib/pdf/constants";
+import { sanitizeTextForDb } from "@/lib/text/sanitize";
+import { extractArxivId } from "@/lib/arxiv/utils";
 import crypto from "crypto";
-
-/**
- * Sanitize text for PostgreSQL - remove null characters and other problematic Unicode
- */
-function sanitizeTextForDb(text: string | null | undefined): string {
-  if (!text) return "";
-  // Remove null characters (\u0000) which PostgreSQL cannot store in text fields
-  // Also remove other control characters that might cause issues
-  return text
-    .replace(/\u0000/g, "")
-    .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g, "");
-}
 
 export const runtime = "nodejs";
 export const maxDuration = 300;
@@ -150,7 +141,7 @@ export async function POST(request: NextRequest) {
       }
 
       // Create chunks for this page (using sanitized content)
-      const chunks = chunkPageContent(sanitizedTextContent);
+      const chunks = chunkTextContent(sanitizedTextContent);
       for (let i = 0; i < chunks.length; i++) {
         await supabase.from("chunks").insert({
           paper_id: paper.id,
@@ -203,17 +194,6 @@ export async function POST(request: NextRequest) {
       { status: 500 },
     );
   }
-}
-
-/**
- * Extract arXiv ID from URL
- * Handles formats like:
- * - https://arxiv.org/abs/2301.00001
- * - https://arxiv.org/pdf/2301.00001.pdf
- */
-function extractArxivId(url: string): string | null {
-  const match = url.match(/arxiv\.org\/(?:abs|pdf)\/(\d+\.\d+)/);
-  return match ? match[1] : null;
 }
 
 function getStorageStatus(error: unknown): number | null {

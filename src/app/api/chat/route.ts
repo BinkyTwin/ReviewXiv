@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { buildPageContext, CHAT_SYSTEM_PROMPT } from "@/lib/citations/prompts";
+import {
+  buildPageContext,
+  buildSectionContext,
+  CHAT_SYSTEM_PROMPT,
+} from "@/lib/citations/prompts";
 import {
   buildChunkContext,
   summarizeRetrievedChunks,
@@ -12,10 +16,15 @@ interface ChatRequest {
   paperId: string;
   conversationId?: string;
   message: string;
+  format?: "pdf" | "html";
   /** Pages for legacy mode (when RAG is disabled) */
   pages?: Array<{ pageNumber: number; textContent: string }>;
+  /** Sections for HTML mode */
+  sections?: Array<{ sectionId: string; textContent: string; title?: string }>;
   highlightContext?: {
-    page: number;
+    format?: "pdf" | "html";
+    pageNumber?: number;
+    sectionId?: string;
     text: string;
   };
   /** Base64 image data URL for vision analysis */
@@ -48,6 +57,8 @@ export async function POST(request: NextRequest) {
     let ragInfo = "";
 
     // Lazy embeddings trigger: générer les embeddings manquants si nécessaire
+    const paperFormat = body.format ?? "pdf";
+
     if (useRag) {
       const { data: paper } = await supabase
         .from("papers")
@@ -98,8 +109,27 @@ export async function POST(request: NextRequest) {
       } catch (ragError) {
         console.error("RAG failed, falling back to pages:", ragError);
         // Fallback to legacy page-based context if RAG fails
-        if (body.pages && body.pages.length > 0) {
-          context = buildPageContext(body.pages, body.highlightContext);
+        if (paperFormat === "html" && body.sections && body.sections.length > 0) {
+          context = buildSectionContext(
+            body.sections,
+            body.highlightContext?.sectionId && body.highlightContext.text
+              ? {
+                  sectionId: body.highlightContext.sectionId,
+                  text: body.highlightContext.text,
+                }
+              : undefined,
+          );
+          ragInfo = "[RAG: fallback to sections]";
+        } else if (body.pages && body.pages.length > 0) {
+          context = buildPageContext(
+            body.pages,
+            body.highlightContext?.pageNumber && body.highlightContext.text
+              ? {
+                  page: body.highlightContext.pageNumber,
+                  text: body.highlightContext.text,
+                }
+              : undefined,
+          );
           ragInfo = "[RAG: fallback to pages]";
         } else {
           throw new Error(
@@ -107,13 +137,34 @@ export async function POST(request: NextRequest) {
           );
         }
       }
+    } else if (paperFormat === "html" && body.sections && body.sections.length > 0) {
+      context = buildSectionContext(
+        body.sections,
+        body.highlightContext?.sectionId && body.highlightContext.text
+          ? {
+              sectionId: body.highlightContext.sectionId,
+              text: body.highlightContext.text,
+            }
+          : undefined,
+      );
+      ragInfo = "[RAG: disabled, using sections]";
     } else if (body.pages && body.pages.length > 0) {
-      // Legacy mode: use provided pages
-      context = buildPageContext(body.pages, body.highlightContext);
+      context = buildPageContext(
+        body.pages,
+        body.highlightContext?.pageNumber && body.highlightContext.text
+          ? {
+              page: body.highlightContext.pageNumber,
+              text: body.highlightContext.text,
+            }
+          : undefined,
+      );
       ragInfo = "[RAG: disabled, using pages]";
     } else {
       return NextResponse.json(
-        { error: "Either RAG must be enabled or pages must be provided" },
+        {
+          error:
+            "Either RAG must be enabled or pages/sections must be provided",
+        },
         { status: 400 },
       );
     }

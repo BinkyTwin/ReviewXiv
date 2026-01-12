@@ -23,22 +23,39 @@ export function isTranslationLanguage(
 
 export interface TranslationSelection {
   text: string;
-  pageNumber: number;
+  format: "pdf" | "html";
+  pageNumber?: number;
+  sectionId?: string;
   rects: HighlightRect[];
 }
 
-export interface InlineTranslation {
+interface BaseTranslation {
   id: string;
   paperId: string;
-  pageNumber: number;
+  format: "pdf" | "html";
   sourceText: string;
   sourceLanguage?: string;
   targetLanguage: TranslationLanguage;
   translatedText: string;
   startOffset: number;
   endOffset: number;
-  rects: HighlightRect[];
   isActive: boolean;
   createdAt?: string;
   updatedAt?: string;
 }
+
+export interface PdfInlineTranslation extends BaseTranslation {
+  format: "pdf";
+  pageNumber: number;
+  rects: HighlightRect[];
+  sectionId?: null;
+}
+
+export interface HtmlInlineTranslation extends BaseTranslation {
+  format: "html";
+  sectionId: string;
+  pageNumber?: number;
+  rects: HighlightRect[];
+}
+
+export type InlineTranslation = PdfInlineTranslation | HtmlInlineTranslation;

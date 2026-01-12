@@ -76,10 +76,7 @@ export function usePDFDocument({
 
   // Load PDF.js from CDN
   useEffect(() => {
-    if (typeof window === "undefined" || window.pdfjsLib) {
-      if (window.pdfjsLib) setPdfjsLoaded(true);
-      return;
-    }
+    if (typeof window === "undefined" || window.pdfjsLib) return;
 
     const script = document.createElement("script");
     script.src = `${PDFJS_CDN}/pdf.min.mjs`;

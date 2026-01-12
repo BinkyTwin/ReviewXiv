@@ -11,6 +11,7 @@ export interface ChunkWithEmbedding {
   page_id: string;
   page_number: number;
   chunk_index: number;
+  section_id?: string | null;
   content: string;
   start_offset: number;
   end_offset: number;
@@ -28,6 +29,7 @@ export interface ChunkSearchResult {
   page_id: string;
   page_number: number;
   chunk_index: number;
+  section_id?: string | null;
   content: string;
   start_offset: number;
   end_offset: number;
@@ -75,6 +77,7 @@ export interface ContextChunk {
   endOffset: number;
   chunkId: string;
   score: number;
+  sectionId?: string | null;
 }
 
 /**

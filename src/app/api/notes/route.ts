@@ -35,10 +35,12 @@ export async function GET(request: NextRequest) {
     const transformedNotes = notes.map((n) => ({
       id: n.id,
       paperId: n.paper_id,
+      format: n.format || "pdf",
       highlightId: n.highlight_id,
       title: n.title,
       content: n.content,
       pageNumber: n.page_number,
+      sectionId: n.section_id || undefined,
       createdAt: n.created_at,
       updatedAt: n.updated_at,
     }));
@@ -58,7 +60,8 @@ export async function POST(request: NextRequest) {
   try {
     const body: CreateNoteRequest = await request.json();
 
-    const { paperId, highlightId, title, content, pageNumber } = body;
+    const { paperId, highlightId, title, content, pageNumber, format, sectionId } =
+      body;
 
     if (!paperId || !content) {
       return NextResponse.json(
@@ -69,6 +72,22 @@ export async function POST(request: NextRequest) {
 
     const supabase = await createClient();
 
+    let resolvedPageNumber = pageNumber ?? null;
+    const noteFormat = format ?? "pdf";
+
+    if (noteFormat === "html" && sectionId && resolvedPageNumber === null) {
+      const { data: sectionRow } = await supabase
+        .from("paper_sections")
+        .select("section_index")
+        .eq("paper_id", paperId)
+        .eq("section_id", sectionId)
+        .maybeSingle();
+
+      if (sectionRow) {
+        resolvedPageNumber = sectionRow.section_index + 1;
+      }
+    }
+
     const { data: note, error } = await supabase
       .from("notes")
       .insert({
@@ -76,7 +95,9 @@ export async function POST(request: NextRequest) {
         highlight_id: highlightId || null,
         title: title || null,
         content,
-        page_number: pageNumber || null,
+        page_number: resolvedPageNumber,
+        format: noteFormat,
+        section_id: noteFormat === "html" ? sectionId || null : null,
       })
       .select()
       .single();
@@ -93,10 +114,12 @@ export async function POST(request: NextRequest) {
     const transformedNote = {
       id: note.id,
       paperId: note.paper_id,
+      format: note.format || "pdf",
       highlightId: note.highlight_id,
       title: note.title,
       content: note.content,
       pageNumber: note.page_number,
+      sectionId: note.section_id || undefined,
       createdAt: note.created_at,
       updatedAt: note.updated_at,
     };
@@ -158,10 +181,12 @@ export async function PUT(request: NextRequest) {
     const transformedNote = {
       id: note.id,
       paperId: note.paper_id,
+      format: note.format || "pdf",
       highlightId: note.highlight_id,
       title: note.title,
       content: note.content,
       pageNumber: note.page_number,
+      sectionId: note.section_id || undefined,
       createdAt: note.created_at,
       updatedAt: note.updated_at,
     };

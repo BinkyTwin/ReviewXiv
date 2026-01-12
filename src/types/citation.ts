@@ -1,8 +1,8 @@
 /**
  * Represents a citation from the LLM response
- * Citations link specific text passages to their source in the PDF
  */
-export interface Citation {
+export interface PdfCitation {
+  format?: "pdf";
   /** Page number (1-indexed) */
   page: number;
   /** Character offset start in page's text_content */
@@ -14,6 +14,22 @@ export interface Citation {
   /** Whether the citation has been validated against actual text */
   verified?: boolean;
 }
+
+export interface HtmlCitation {
+  format: "html";
+  /** Section ID from HTML */
+  sectionId: string;
+  /** Character offset start in section's text_content */
+  start: number;
+  /** Character offset end in section's text_content */
+  end: number;
+  /** Quoted text for verification (max 100 chars) */
+  quote: string;
+  /** Whether the citation has been validated against actual text */
+  verified?: boolean;
+}
+
+export type Citation = PdfCitation | HtmlCitation;
 
 /**
  * LLM response format with citations

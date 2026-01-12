@@ -32,6 +32,7 @@ interface HybridSearchResult {
   page_id: string;
   page_number: number;
   chunk_index: number;
+  section_id?: string | null;
   content: string;
   start_offset: number;
   end_offset: number;
@@ -46,6 +47,7 @@ interface VectorSearchResult {
   page_id: string;
   page_number: number;
   chunk_index: number;
+  section_id?: string | null;
   content: string;
   start_offset: number;
   end_offset: number;
@@ -58,6 +60,7 @@ interface MmrSearchResult {
   page_id: string;
   page_number: number;
   chunk_index: number;
+  section_id?: string | null;
   content: string;
   start_offset: number;
   end_offset: number;
@@ -207,6 +210,7 @@ function mapHybridResults(data: HybridSearchResult[] | null): ContextChunk[] {
     endOffset: row.end_offset,
     chunkId: row.id,
     score: row.combined_score,
+    sectionId: row.section_id ?? null,
   }));
 }
 
@@ -223,6 +227,7 @@ function mapVectorResults(data: VectorSearchResult[] | null): ContextChunk[] {
     endOffset: row.end_offset,
     chunkId: row.id,
     score: row.similarity,
+    sectionId: row.section_id ?? null,
   }));
 }
 
@@ -239,5 +244,6 @@ function mapMmrResults(data: MmrSearchResult[] | null): ContextChunk[] {
     endOffset: row.end_offset,
     chunkId: row.id,
     score: row.relevance_score,
+    sectionId: row.section_id ?? null,
   }));
 }

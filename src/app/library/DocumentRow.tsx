@@ -60,6 +60,7 @@ export function DocumentRow({ paper }: { paper: Paper }) {
     const authors = paper.authors?.join(", ") || "Chercheurs non spécifiés";
     const truncatedAuthors =
         authors.length > 50 ? `${authors.slice(0, 50)}...` : authors;
+    const countLabel = paper.format === "html" ? "sec" : "p";
 
     const handleDelete = async (e: React.MouseEvent) => {
         e.preventDefault();
@@ -105,7 +106,8 @@ export function DocumentRow({ paper }: { paper: Paper }) {
                     {/* Pages */}
                     <div className="hidden md:block col-span-1 text-center">
                         <span className="text-xs font-bold text-muted-foreground tabular-nums bg-muted px-2 py-1 rounded-lg border border-border/50">
-                            {paper.page_count}p
+                            {paper.page_count}
+                            {countLabel}
                         </span>
                     </div>
 

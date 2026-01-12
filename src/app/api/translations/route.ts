@@ -4,7 +4,9 @@ import type { HighlightRect } from "@/types/highlight";
 
 interface CreateTranslationRequest {
   paperId: string;
-  pageNumber: number;
+  pageNumber?: number;
+  format?: "pdf" | "html";
+  sectionId?: string;
   sourceText: string;
   sourceLanguage?: string;
   targetLanguage: string;
@@ -49,7 +51,9 @@ export async function GET(request: NextRequest) {
     const transformedTranslations = translations.map((t) => ({
       id: t.id,
       paperId: t.paper_id,
+      format: t.format || "pdf",
       pageNumber: t.page_number,
+      sectionId: t.section_id || undefined,
       sourceText: t.source_text,
       sourceLanguage: t.source_language,
       targetLanguage: t.target_language,
@@ -80,6 +84,8 @@ export async function POST(request: NextRequest) {
     const {
       paperId,
       pageNumber,
+      format,
+      sectionId,
       sourceText,
       sourceLanguage,
       targetLanguage,
@@ -92,7 +98,6 @@ export async function POST(request: NextRequest) {
 
     if (
       !paperId ||
-      !pageNumber ||
       !sourceText ||
       !targetLanguage ||
       !translatedText ||
@@ -106,12 +111,46 @@ export async function POST(request: NextRequest) {
     }
 
     const supabase = await createClient();
+    const translationFormat = format ?? "pdf";
+    let resolvedPageNumber = pageNumber;
+
+    if (translationFormat === "html") {
+      if (!sectionId) {
+        return NextResponse.json(
+          { error: "sectionId is required for HTML translations" },
+          { status: 400 },
+        );
+      }
+
+      if (resolvedPageNumber === undefined) {
+        const { data: sectionRow, error: sectionError } = await supabase
+          .from("paper_sections")
+          .select("section_index")
+          .eq("paper_id", paperId)
+          .eq("section_id", sectionId)
+          .maybeSingle();
+
+        if (sectionError || !sectionRow) {
+          return NextResponse.json(
+            { error: "Invalid sectionId" },
+            { status: 400 },
+          );
+        }
+
+        resolvedPageNumber = sectionRow.section_index + 1;
+      }
+    } else if (resolvedPageNumber === undefined) {
+      return NextResponse.json(
+        { error: "pageNumber is required for PDF translations" },
+        { status: 400 },
+      );
+    }
 
     const { data: translation, error } = await supabase
       .from("inline_translations")
       .insert({
         paper_id: paperId,
-        page_number: pageNumber,
+        page_number: resolvedPageNumber,
         source_text: sourceText,
         source_language: sourceLanguage || null,
         target_language: targetLanguage,
@@ -120,6 +159,8 @@ export async function POST(request: NextRequest) {
         end_offset: endOffset,
         rects: rects || [],
         is_active: isActive,
+        format: translationFormat,
+        section_id: translationFormat === "html" ? sectionId : null,
       })
       .select()
       .single();
@@ -136,7 +177,9 @@ export async function POST(request: NextRequest) {
     const transformedTranslation = {
       id: translation.id,
       paperId: translation.paper_id,
+      format: translation.format || "pdf",
       pageNumber: translation.page_number,
+      sectionId: translation.section_id || undefined,
       sourceText: translation.source_text,
       sourceLanguage: translation.source_language,
       targetLanguage: translation.target_language,
@@ -207,7 +250,9 @@ export async function PUT(request: NextRequest) {
     const transformedTranslation = {
       id: translation.id,
       paperId: translation.paper_id,
+      format: translation.format || "pdf",
       pageNumber: translation.page_number,
+      sectionId: translation.section_id || undefined,
       sourceText: translation.source_text,
       sourceLanguage: translation.source_language,
       targetLanguage: translation.target_language,

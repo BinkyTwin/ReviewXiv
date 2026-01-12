@@ -87,6 +87,33 @@ Return ONLY a valid JSON object with this exact schema:
 - Do NOT include any extra keys or commentary`;
 
 /**
+ * System prompt for citation extraction from HTML sections.
+ */
+export const CITATION_EXTRACTION_SYSTEM_PROMPT_HTML = `You extract citation spans that support a provided answer.
+
+## OUTPUT FORMAT (JSON ONLY)
+Return ONLY a valid JSON object with this exact schema:
+{
+  "citations": [
+    {
+      "format": "html",
+      "sectionId": "S1",
+      "start": 0,
+      "end": 10,
+      "quote": "Exact excerpt"
+    }
+  ]
+}
+
+## STRICT RULES
+- Use ONLY text that appears in the provided context
+- "quote" must be verbatim (max 100 characters)
+- "start" and "end" are character offsets within the section text
+- "sectionId" must match the [SECTION ...] headers from context
+- If you cannot find support, return {"citations": []}
+- Do NOT include any extra keys or commentary`;
+
+/**
  * System prompt for plain-text answers (no JSON, no inline citations).
  */
 export const CHAT_SYSTEM_PROMPT = `You are ReviewXiv, an expert academic research assistant. You help researchers, students, and professionals understand, analyze, and synthesize scientific papers.
@@ -131,6 +158,32 @@ export function buildPageContext(
   for (const page of pages) {
     context += `\n[PAGE ${page.pageNumber}]\n`;
     context += page.textContent + "\n";
+  }
+
+  return context;
+}
+
+/**
+ * Build context from HTML sections for LLM
+ */
+export function buildSectionContext(
+  sections: Array<{
+    sectionId: string;
+    textContent: string;
+    title?: string | null;
+  }>,
+  highlightContext?: { sectionId: string; text: string },
+): string {
+  let context = "";
+
+  if (highlightContext) {
+    context += `\n[SELECTED PASSAGE - Section ${highlightContext.sectionId}]\n`;
+    context += highlightContext.text + "\n\n";
+  }
+
+  for (const section of sections) {
+    context += `\n[SECTION ${section.sectionId}]\n`;
+    context += section.textContent + "\n";
   }
 
   return context;

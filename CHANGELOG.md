@@ -4,6 +4,12 @@ This file tracks main tasks completed by AI agents. Only significant changes are
 
 ---
 
+## 2026-01-12
+
+FEATURE: Add arXiv HTML import pipeline with section parsing and caching
+FEATURE: Add HTML reader with highlights, citations, translations, notes, and TOC
+REFACTOR: Extend highlights, notes, translations, and chunks to support HTML format
+
 ## 2026-01-11
 
 REFACTOR: Extract translation overlays to independent TranslationLayer component
