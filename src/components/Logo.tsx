@@ -1,8 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import { useTheme } from "next-themes";
-import { useEffect, useState } from "react";
+import { cn } from "@/lib/utils";
 
 interface LogoProps {
   className?: string;
@@ -11,32 +10,24 @@ interface LogoProps {
 }
 
 export function Logo({ className, width = 32, height = 32 }: LogoProps) {
-  const { resolvedTheme } = useTheme();
-  const [mounted, setMounted] = useState(false);
-
-  // Avoid hydration mismatch
-  useEffect(() => {
-    setMounted(true);
-  }, []);
-
-  if (!mounted) {
-    return <div style={{ width, height }} className={className} />;
-  }
-
-  // resolvedTheme is either 'light' or 'dark'
-  // logo_theme_blanc: for light theme (black logo)
-  // logo_theme_noir: for dark theme (white logo)
-  const isDark = resolvedTheme === "dark";
-  const src = isDark ? "/logo_theme_noir.png" : "/logo_theme_blanc.png";
-
   return (
-    <Image
-      src={src}
-      alt="ReviewXiv Logo"
-      width={width}
-      height={height}
-      className={`${className} object-contain`}
-      priority
-    />
+    <>
+      <Image
+        src="/logo_theme_blanc.png"
+        alt="ReviewXiv Logo"
+        width={width}
+        height={height}
+        className={cn("object-contain block dark:hidden", className)}
+        priority
+      />
+      <Image
+        src="/logo_theme_noir.png"
+        alt="ReviewXiv Logo"
+        width={width}
+        height={height}
+        className={cn("object-contain hidden dark:block", className)}
+        priority
+      />
+    </>
   );
 }

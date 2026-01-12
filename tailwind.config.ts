@@ -43,6 +43,11 @@ const config: Config = {
         border: "hsl(var(--border))",
         input: "hsl(var(--input))",
         ring: "hsl(var(--ring))",
+        pdf: {
+          DEFAULT: "hsl(var(--pdf-page))",
+          foreground: "hsl(var(--pdf-page-foreground))",
+          border: "hsl(var(--pdf-page-border))",
+        },
         chart: {
           "1": "hsl(var(--chart-1))",
           "2": "hsl(var(--chart-2))",

@@ -26,6 +26,13 @@ export function PaperUploader({
   const [error, setError] = useState<string | null>(null);
   const [progress, setProgress] = useState<string | null>(null);
 
+  const isArxivInput = arxivUrl.trim().length > 0 && !file;
+
+  const isValidArxivUrl = (url: string) =>
+    /arxiv\.org\/(?:abs|pdf|html)\/|ar5iv\.labs\.arxiv\.org\/html\//i.test(
+      url,
+    );
+
   const onDrop = useCallback(
     (acceptedFiles: File[], fileRejections: FileRejection[]) => {
       const rejection = fileRejections[0];
@@ -76,34 +83,47 @@ export function PaperUploader({
   };
 
   const handleSubmit = async () => {
-    if (!file) return;
-    if (file.size > MAX_PDF_SIZE_BYTES) {
+    if (!file && !arxivUrl.trim()) return;
+
+    if (!file && arxivUrl.trim() && !isValidArxivUrl(arxivUrl)) {
+      setError("Veuillez entrer une URL arXiv valide.");
+      return;
+    }
+
+    if (file && file.size > MAX_PDF_SIZE_BYTES) {
       setError(`File too large. Max size is ${MAX_PDF_SIZE_LABEL}.`);
       return;
     }
 
     setIsUploading(true);
     setError(null);
-    setProgress("Uploading PDF...");
+    setProgress(file ? "Téléversement du PDF..." : "Importation arXiv...");
 
     try {
-      const formData = new FormData();
-      formData.append("file", file);
-      if (arxivUrl) {
-        formData.append("arxivUrl", arxivUrl);
-      }
-
-      const response = await fetch("/api/papers/ingest", {
-        method: "POST",
-        body: formData,
-      });
+      const response = file
+        ? await (async () => {
+            const formData = new FormData();
+            formData.append("file", file);
+            if (arxivUrl) {
+              formData.append("arxivUrl", arxivUrl);
+            }
+            return fetch("/api/papers/ingest", {
+              method: "POST",
+              body: formData,
+            });
+          })()
+        : await fetch("/api/papers/import-arxiv", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ url: arxivUrl }),
+          });
 
       if (!response.ok) {
         const data = await response.json();
         throw new Error(data.error || "Upload failed");
       }
 
-      setProgress("Processing PDF...");
+      setProgress(file ? "Analyse du PDF..." : "Analyse HTML arXiv...");
       const data = await response.json();
 
       setProgress(null);
@@ -147,16 +167,16 @@ export function PaperUploader({
                   e.stopPropagation();
                   clearFile();
                 }}
-                className="h-6 w-6 rounded-full bg-muted flex items-center justify-center hover:bg-destructive hover:text-white transition-colors"
+                className="h-6 w-6 rounded-full bg-muted flex items-center justify-center hover:bg-destructive hover:text-destructive-foreground transition-colors"
                 disabled={isUploading}
               >
                 <X className="h-3 w-3" />
               </button>
-            </div>
-            <p className="text-[11px] text-muted-foreground font-bold uppercase tracking-widest">
-              Fichier prêt à l'import
-            </p>
-          </div>
+	            </div>
+	            <p className="text-[11px] text-muted-foreground font-bold uppercase tracking-widest">
+	              Fichier prêt à l&apos;import
+	            </p>
+	          </div>
         ) : (
           <div className="space-y-4">
             <div className="h-16 w-16 rounded-3xl bg-muted/50 flex items-center justify-center mx-auto apple-shadow group-hover:scale-110 transition-transform">
@@ -178,7 +198,7 @@ export function PaperUploader({
 
       <div className="space-y-2 px-1">
         <label className="text-[11px] font-bold text-muted-foreground uppercase tracking-widest ml-1">
-          Lien arXiv (Optionnel)
+          Lien arXiv (optionnel ou import direct)
         </label>
         <Input
           placeholder="https://arxiv.org/abs/..."
@@ -209,7 +229,7 @@ export function PaperUploader({
 
       <Button
         onClick={handleSubmit}
-        disabled={!file || isUploading}
+        disabled={(!file && !arxivUrl.trim()) || isUploading}
         className="w-full rounded-full py-7 h-auto font-bold text-lg apple-shadow bg-primary text-primary-foreground hover:scale-[1.01] transition-all"
       >
         {isUploading ? (
@@ -220,7 +240,7 @@ export function PaperUploader({
         ) : (
           <>
             <Upload className="h-5 w-5 mr-3" />
-            Importer le Document
+            {isArxivInput ? "Importer depuis arXiv" : "Importer le Document"}
           </>
         )}
       </Button>

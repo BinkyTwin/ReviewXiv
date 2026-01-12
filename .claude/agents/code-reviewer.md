@@ -50,11 +50,11 @@ Organise ton feedback par priorite :
 
 ```bash
 # Verifier le typage Python
-cd deepread-api && mypy .
+cd reviewxiv-api && mypy .
 
 # Linter Python
-cd deepread-api && ruff check .
+cd reviewxiv-api && ruff check .
 
 # ESLint frontend
-cd deepread-app && npm run lint
+cd reviewxiv-app && npm run lint
 ```

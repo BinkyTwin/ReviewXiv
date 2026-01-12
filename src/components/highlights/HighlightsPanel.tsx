@@ -33,6 +33,7 @@ interface HighlightsPanelProps {
   onAskAI?: (highlight: Highlight) => void;
   onDelete?: (highlightId: string) => void;
   onDeleteAll?: () => void;
+  sectionTitles?: Record<string, string>;
   className?: string;
 }
 
@@ -59,15 +60,18 @@ export function HighlightsPanel({
   onAskAI,
   onDelete,
   onDeleteAll,
+  sectionTitles,
   className,
 }: HighlightsPanelProps) {
   const [isExpanded, setIsExpanded] = useState(true);
   const [isDeleting, setIsDeleting] = useState(false);
 
-  // Group highlights by page
-  const groupedHighlights = highlights.reduce(
+  const pdfHighlights = highlights.filter((h) => h.format !== "html");
+  const htmlHighlights = highlights.filter((h) => h.format === "html");
+
+  const groupedPdfHighlights = pdfHighlights.reduce(
     (acc, highlight) => {
-      const page = highlight.pageNumber;
+      const page = highlight.pageNumber ?? 1;
       if (!acc[page]) {
         acc[page] = [];
       }
@@ -75,6 +79,18 @@ export function HighlightsPanel({
       return acc;
     },
     {} as Record<number, Highlight[]>,
+  );
+
+  const groupedHtmlHighlights = htmlHighlights.reduce(
+    (acc, highlight) => {
+      const sectionId = highlight.sectionId || "unknown-section";
+      if (!acc[sectionId]) {
+        acc[sectionId] = [];
+      }
+      acc[sectionId].push(highlight);
+      return acc;
+    },
+    {} as Record<string, Highlight[]>,
   );
 
   const handleDelete = async (highlightId: string) => {
@@ -196,72 +212,139 @@ export function HighlightsPanel({
                   </p>
                 </div>
               ) : (
-                Object.entries(groupedHighlights)
-                  .sort(([a], [b]) => Number(a) - Number(b))
-                  .map(([page, pageHighlights]) => (
-                    <div key={page} className="space-y-1">
-                      <div className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider px-2 pt-1">
-                        Page {page}
-                      </div>
-                      {pageHighlights.map((highlight) => (
-                        <div
-                          key={highlight.id}
-                          className="group flex items-start gap-2 p-2 rounded-md hover:bg-muted/60 transition-colors"
-                        >
-                          {/* Color indicator */}
-                          <div
-                            className={cn(
-                              "w-3 h-3 rounded-sm mt-0.5 flex-shrink-0",
-                              COLOR_MAP[highlight.color],
-                            )}
-                            title={COLOR_LABELS[highlight.color]}
-                          />
-
-                          {/* Text content */}
-                          <div className="flex-1 min-w-0">
-                            <p
-                              className="text-xs leading-relaxed cursor-pointer hover:text-primary transition-colors"
-                              onClick={() => onHighlightClick?.(highlight)}
-                              title="Cliquer pour voir dans le document"
-                            >
-                              {truncateText(highlight.selectedText)}
-                            </p>
-                          </div>
-
-                          {/* Actions */}
-                          <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-6 w-6"
-                              onClick={() => onHighlightClick?.(highlight)}
-                              title="Voir dans le document"
-                            >
-                              <ExternalLink className="h-3 w-3" />
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-6 w-6"
-                              onClick={() => onAskAI?.(highlight)}
-                              title="Demander a l'IA"
-                            >
-                              <MessageSquare className="h-3 w-3" />
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-6 w-6 text-destructive hover:text-destructive"
-                              onClick={() => handleDelete(highlight.id)}
-                              title="Supprimer"
-                            >
-                              <Trash2 className="h-3 w-3" />
-                            </Button>
-                          </div>
+                <>
+                  {Object.entries(groupedPdfHighlights)
+                    .sort(([a], [b]) => Number(a) - Number(b))
+                    .map(([page, pageHighlights]) => (
+                      <div key={`page-${page}`} className="space-y-1">
+                        <div className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider px-2 pt-1">
+                          Page {page}
                         </div>
-                      ))}
-                    </div>
-                  ))
+                        {pageHighlights.map((highlight) => (
+                          <div
+                            key={highlight.id}
+                            className="group flex items-start gap-2 p-2 rounded-md hover:bg-muted/60 transition-colors"
+                          >
+                            <div
+                              className={cn(
+                                "w-3 h-3 rounded-sm mt-0.5 flex-shrink-0",
+                                COLOR_MAP[highlight.color],
+                              )}
+                              title={COLOR_LABELS[highlight.color]}
+                            />
+
+                            <div className="flex-1 min-w-0">
+                              <p
+                                className="text-xs leading-relaxed cursor-pointer hover:text-primary transition-colors"
+                                onClick={() => onHighlightClick?.(highlight)}
+                                title="Cliquer pour voir dans le document"
+                              >
+                                {truncateText(highlight.selectedText)}
+                              </p>
+                            </div>
+
+                            <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-6 w-6"
+                                onClick={() => onHighlightClick?.(highlight)}
+                                title="Voir dans le document"
+                              >
+                                <ExternalLink className="h-3 w-3" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-6 w-6"
+                                onClick={() => onAskAI?.(highlight)}
+                                title="Demander a l'IA"
+                              >
+                                <MessageSquare className="h-3 w-3" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-6 w-6 text-destructive hover:text-destructive"
+                                onClick={() => handleDelete(highlight.id)}
+                                title="Supprimer"
+                              >
+                                <Trash2 className="h-3 w-3" />
+                              </Button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ))}
+
+                  {Object.entries(groupedHtmlHighlights)
+                    .sort(([a], [b]) => a.localeCompare(b))
+                    .map(([sectionId, sectionHighlights]) => {
+                      const label =
+                        sectionTitles?.[sectionId] || `Section ${sectionId}`;
+                      return (
+                        <div key={`section-${sectionId}`} className="space-y-1">
+                          <div className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider px-2 pt-1">
+                            {label}
+                          </div>
+                          {sectionHighlights.map((highlight) => (
+                            <div
+                              key={highlight.id}
+                              className="group flex items-start gap-2 p-2 rounded-md hover:bg-muted/60 transition-colors"
+                            >
+                              <div
+                                className={cn(
+                                  "w-3 h-3 rounded-sm mt-0.5 flex-shrink-0",
+                                  COLOR_MAP[highlight.color],
+                                )}
+                                title={COLOR_LABELS[highlight.color]}
+                              />
+
+                              <div className="flex-1 min-w-0">
+                                <p
+                                  className="text-xs leading-relaxed cursor-pointer hover:text-primary transition-colors"
+                                  onClick={() => onHighlightClick?.(highlight)}
+                                  title="Cliquer pour voir dans le document"
+                                >
+                                  {truncateText(highlight.selectedText)}
+                                </p>
+                              </div>
+
+                              <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-6 w-6"
+                                  onClick={() => onHighlightClick?.(highlight)}
+                                  title="Voir dans le document"
+                                >
+                                  <ExternalLink className="h-3 w-3" />
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-6 w-6"
+                                  onClick={() => onAskAI?.(highlight)}
+                                  title="Demander a l'IA"
+                                >
+                                  <MessageSquare className="h-3 w-3" />
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-6 w-6 text-destructive hover:text-destructive"
+                                  onClick={() => handleDelete(highlight.id)}
+                                  title="Supprimer"
+                                >
+                                  <Trash2 className="h-3 w-3" />
+                                </Button>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      );
+                    })}
+                </>
               )}
             </div>
           </ScrollArea>

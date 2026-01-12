@@ -18,27 +18,16 @@ import {
   usePdfHighlighterContext,
 } from "react-pdf-highlighter-extended";
 
-import type {
-  Highlight as SupabaseHighlight,
-  HighlightColor,
-  HighlightRect,
-} from "@/types/highlight";
+import type { PdfHighlight, HighlightColor, HighlightRect } from "@/types/highlight";
+import type { TranslationSelection } from "@/types/translation";
 import type { PDFHighlighterViewerProps, PageDimensionsMap } from "./types";
 import { HighlightTip } from "./HighlightTip";
 import { AreaSelectionTip } from "./AreaSelectionTip";
 import { CitationFlash } from "./CitationFlash";
 import { ZoomToolbar } from "./ZoomToolbar";
+import { TranslationLayer } from "./TranslationLayer";
 import { offsetsToRects } from "@/lib/highlight-renderer";
 import { cn } from "@/lib/utils";
-
-// Map ReviewXiv colors to highlight classes
-const HIGHLIGHT_CLASSES: Record<HighlightColor, string> = {
-  yellow: "highlight-yellow",
-  green: "highlight-green",
-  blue: "highlight-blue",
-  red: "highlight-red",
-  purple: "highlight-purple",
-};
 
 const ZOOM_STEP = 0.1;
 const MIN_ZOOM = 0.5;
@@ -60,7 +49,7 @@ function LoadingSpinner() {
 
 // Convert Supabase highlights to react-pdf-highlighter-extended format
 function supabaseToExtendedHighlight(
-  highlight: SupabaseHighlight,
+  highlight: PdfHighlight,
   pageDimensions: PageDimensionsMap,
 ): ColoredHighlight | null {
   const pageDim = pageDimensions.get(highlight.pageNumber);
@@ -110,9 +99,8 @@ interface HighlightContainerProps {
 }
 
 function HighlightContainer({ onHighlightClick }: HighlightContainerProps) {
-  const { highlight, isScrolledTo } = useHighlightContainerContext();
-  // Cast to access color property - need unknown intermediate cast due to type differences
-  const coloredHighlight = highlight as unknown as ColoredHighlight;
+  const { highlight, isScrolledTo } =
+    useHighlightContainerContext<ColoredHighlight>();
 
   const handleClick = useCallback(
     (event: MouseEvent) => {
@@ -121,6 +109,9 @@ function HighlightContainer({ onHighlightClick }: HighlightContainerProps) {
     },
     [highlight.id, onHighlightClick],
   );
+
+  // Cast to access color property - need unknown intermediate cast due to type differences
+  const coloredHighlight = highlight as unknown as ColoredHighlight;
 
   // Check if it's an area highlight (has image content)
   if (highlight.content?.image) {
@@ -162,7 +153,7 @@ function HighlightContainer({ onHighlightClick }: HighlightContainerProps) {
 interface SelectionTipWrapperProps {
   onAddHighlight: (color: HighlightColor) => void;
   onAskSelection?: (text: string, page: number) => void;
-  onTranslateSelection?: (text: string, page: number) => void;
+  onTranslateSelection?: (selection: TranslationSelection) => void;
   onAskImage?: (imageData: string, page: number) => void;
   onAreaHighlightCreate?: (
     imageData: string,
@@ -245,10 +236,19 @@ function SelectionTipWrapper({
       onTranslate={
         onTranslateSelection
           ? () => {
-              onTranslateSelection(
-                selection.content?.text || "",
-                selection.position.boundingRect.pageNumber,
-              );
+              const rects = selection.position.rects.map((rect) => ({
+                x: rect.x1 / rect.width,
+                y: rect.y1 / rect.height,
+                width: (rect.x2 - rect.x1) / rect.width,
+                height: (rect.y2 - rect.y1) / rect.height,
+              }));
+
+              onTranslateSelection({
+                text: selection.content?.text || "",
+                format: "pdf",
+                pageNumber: selection.position.boundingRect.pageNumber,
+                rects,
+              });
               handleDismiss();
             }
           : undefined
@@ -263,14 +263,14 @@ interface PdfHighlighterInnerProps {
   pdfDocument: PDFDocumentProxy;
   areaSelectionMode: boolean;
   scaleValue: "page-width" | number;
-  extendedHighlights: ColoredHighlight[];
+  viewerHighlights: ColoredHighlight[];
   highlighterUtilsRef: React.MutableRefObject<PdfHighlighterUtils | undefined>;
   onPageDimensionsChange: (dimensions: PageDimensionsMap) => void;
   onViewerReady: () => void;
   onHighlightCreate: (selection: PdfSelection, color: HighlightColor) => void;
   onHighlightClick?: (highlightId: string) => void;
   onAskSelection?: (text: string, page: number) => void;
-  onTranslateSelection?: (text: string, page: number) => void;
+  onTranslateSelection?: (selection: TranslationSelection) => void;
   onAskImage?: (imageData: string, page: number) => void;
   onAreaHighlightCreate?: (
     imageData: string,
@@ -283,7 +283,7 @@ function PdfHighlighterInner({
   pdfDocument,
   areaSelectionMode,
   scaleValue,
-  extendedHighlights,
+  viewerHighlights,
   highlighterUtilsRef,
   onPageDimensionsChange,
   onViewerReady,
@@ -377,7 +377,7 @@ function PdfHighlighterInner({
       pdfDocument={pdfDocument}
       enableAreaSelection={enableAreaSelectionFn}
       pdfScaleValue={scaleValue}
-      highlights={extendedHighlights}
+      highlights={viewerHighlights}
       onSelection={handleSelection}
       onCreateGhostHighlight={handleCreateGhostHighlight}
       onRemoveGhostHighlight={handleRemoveGhostHighlight}
@@ -404,6 +404,7 @@ export function PDFHighlighterViewer({
   pdfUrl,
   paperId,
   highlights = [],
+  translations = [],
   activeCitation,
   textItemsMap,
   onHighlightCreate,
@@ -413,6 +414,10 @@ export function PDFHighlighterViewer({
   onAskImage,
   onAreaHighlightCreate,
   scrollToHighlightRef,
+  onTranslationToggle,
+  translationLanguage,
+  translationLanguageOptions,
+  onTranslationLanguageChange,
   className,
 }: PDFHighlighterViewerProps) {
   // Refs
@@ -435,8 +440,8 @@ export function PDFHighlighterViewer({
 
   // Mount effect
   useEffect(() => {
-    setIsMounted(true);
-    return () => setIsMounted(false);
+    const raf = window.requestAnimationFrame(() => setIsMounted(true));
+    return () => window.cancelAnimationFrame(raf);
   }, []);
 
   // Container width tracking
@@ -458,9 +463,12 @@ export function PDFHighlighterViewer({
 
   // Reset on URL change
   useEffect(() => {
-    setPageDimensionsMap(new Map());
-    setZoomLevel(1);
-    setViewerReady(false);
+    const raf = window.requestAnimationFrame(() => {
+      setPageDimensionsMap(new Map());
+      setZoomLevel(1);
+      setViewerReady(false);
+    });
+    return () => window.cancelAnimationFrame(raf);
   }, [pdfUrl]);
 
   // Calculate scale
@@ -478,13 +486,19 @@ export function PDFHighlighterViewer({
     return Number.isFinite(nextScale) ? nextScale : "page-width";
   }, [fitScale, zoomLevel, viewerReady]);
 
-  // Convert highlights to extended format
+  // Convert highlights to extended format (translations are rendered separately via TranslationLayer)
   const extendedHighlights = useMemo(() => {
     if (!viewerReady || pageDimensionsMap.size === 0) return [];
     return highlights
       .map((h) => supabaseToExtendedHighlight(h, pageDimensionsMap))
-      .filter((h): h is Highlight => h !== null);
+      .filter((h): h is ColoredHighlight => h !== null);
   }, [highlights, pageDimensionsMap, viewerReady]);
+
+  // Calculate scale for TranslationLayer positioning
+  const currentScale = useMemo(() => {
+    if (typeof scaleValue === "number") return scaleValue;
+    return fitScale ?? 1;
+  }, [scaleValue, fitScale]);
 
   const zoomEnabled = Boolean(fitScale);
   const canZoomIn = zoomLevel < MAX_ZOOM - 0.001;
@@ -541,31 +555,35 @@ export function PDFHighlighterViewer({
 
   // Citation flash effect
   useEffect(() => {
-    if (!activeCitation) {
-      setCitationFlash(null);
-      return;
-    }
+    const raf = window.requestAnimationFrame(() => {
+      if (!activeCitation) {
+        setCitationFlash(null);
+        return;
+      }
 
-    const pageTextItems = textItemsMap?.get(activeCitation.page);
-    if (!pageTextItems || pageTextItems.length === 0) {
-      console.warn(
-        `No text items found for page ${activeCitation.page}, cannot render citation flash`,
-      );
-      setCitationFlash(null);
-      return;
-    }
+      const pageTextItems = textItemsMap?.get(activeCitation.page);
+      if (!pageTextItems || pageTextItems.length === 0) {
+        console.warn(
+          `No text items found for page ${activeCitation.page}, cannot render citation flash`,
+        );
+        setCitationFlash(null);
+        return;
+      }
 
-    const rects = offsetsToRects(activeCitation, pageTextItems);
-    if (rects.length === 0) {
-      console.warn("No rects computed for citation, cannot render flash");
-      setCitationFlash(null);
-      return;
-    }
+      const rects = offsetsToRects(activeCitation, pageTextItems);
+      if (rects.length === 0) {
+        console.warn("No rects computed for citation, cannot render flash");
+        setCitationFlash(null);
+        return;
+      }
 
-    setCitationFlash({
-      pageNumber: activeCitation.page,
-      rects,
+      setCitationFlash({
+        pageNumber: activeCitation.page,
+        rects,
+      });
     });
+
+    return () => window.cancelAnimationFrame(raf);
   }, [activeCitation, textItemsMap]);
 
   // Handle highlight creation
@@ -578,9 +596,10 @@ export function PDFHighlighterViewer({
         height: (rect.y2 - rect.y1) / rect.height,
       }));
 
-      const tempHighlight: SupabaseHighlight = {
+      const tempHighlight: PdfHighlight = {
         id: `temp-${Date.now()}`,
         paperId,
+        format: "pdf",
         pageNumber: selection.position.boundingRect.pageNumber,
         startOffset: 0,
         endOffset: 0,
@@ -624,6 +643,9 @@ export function PDFHighlighterViewer({
         canZoomOut={canZoomOut}
         areaSelectionMode={areaSelectionMode}
         onToggleAreaSelection={handleToggleAreaSelection}
+        translationLanguage={translationLanguage}
+        translationLanguageOptions={translationLanguageOptions}
+        onTranslationLanguageChange={onTranslationLanguageChange}
       />
 
       {/* PDF Viewer */}
@@ -643,7 +665,7 @@ export function PDFHighlighterViewer({
               pdfDocument={pdfDocument}
               areaSelectionMode={areaSelectionMode}
               scaleValue={scaleValue}
-              extendedHighlights={extendedHighlights}
+              viewerHighlights={extendedHighlights}
               highlighterUtilsRef={highlighterUtilsRef}
               onPageDimensionsChange={handlePageDimensionsChange}
               onViewerReady={handleViewerReady}
@@ -660,6 +682,16 @@ export function PDFHighlighterViewer({
 
       {/* Loading spinner while mounting */}
       {!isMounted && <LoadingSpinner />}
+
+      {/* Translation Layer - rendered OUTSIDE react-pdf-highlighter for guaranteed opacity */}
+      {viewerReady && translations.length > 0 && (
+        <TranslationLayer
+          translations={translations}
+          pageDimensions={pageDimensionsMap}
+          scale={currentScale}
+          onToggle={onTranslationToggle}
+        />
+      )}
 
       {/* Citation flash overlay */}
       {citationFlash && (

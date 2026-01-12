@@ -11,9 +11,18 @@ import type { Note } from "@/types/note";
 interface NotesPanelProps {
   paperId: string;
   currentPage?: number;
+  currentSectionId?: string;
+  format?: "pdf" | "html";
+  sectionTitles?: Record<string, string>;
 }
 
-export function NotesPanel({ paperId, currentPage }: NotesPanelProps) {
+export function NotesPanel({
+  paperId,
+  currentPage,
+  currentSectionId,
+  format = "pdf",
+  sectionTitles,
+}: NotesPanelProps) {
   const [notes, setNotes] = useState<Note[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isCreating, setIsCreating] = useState(false);
@@ -50,9 +59,11 @@ export function NotesPanel({ paperId, currentPage }: NotesPanelProps) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           paperId,
+          format,
           title: newNote.title.trim() || undefined,
           content: newNote.content.trim(),
-          pageNumber: currentPage,
+          pageNumber: format === "pdf" ? currentPage : undefined,
+          sectionId: format === "html" ? currentSectionId : undefined,
         }),
       });
 
@@ -264,7 +275,10 @@ export function NotesPanel({ paperId, currentPage }: NotesPanelProps) {
                         )}
                         <p className="text-xs text-muted-foreground">
                           {formatDate(note.createdAt)}
-                          {note.pageNumber && ` | Page ${note.pageNumber}`}
+                          {note.pageNumber && note.format !== "html" && ` | Page ${note.pageNumber}`}
+                          {note.sectionId &&
+                            note.format === "html" &&
+                            ` | ${sectionTitles?.[note.sectionId] || `Section ${note.sectionId}`}`}
                         </p>
                       </div>
                       <div className="flex gap-1">

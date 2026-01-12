@@ -24,6 +24,18 @@ export default async function PaperPage({ params }: PageProps) {
         width,
         height,
         has_text
+      ),
+      paper_sections (
+        id,
+        paper_id,
+        section_index,
+        section_id,
+        title,
+        level,
+        text_content,
+        html_content,
+        parent_section_id,
+        created_at
       )
     `,
     )
@@ -32,6 +44,10 @@ export default async function PaperPage({ params }: PageProps) {
 
   if (error || !paper) {
     notFound();
+  }
+
+  if (paper.format === "html") {
+    return <PaperReader paper={paper} />;
   }
 
   // Get signed URL for PDF

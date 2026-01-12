@@ -41,6 +41,10 @@
     --highlight-red: 4 90% 58%;
     --highlight-orange: 36 100% 50%;
     --highlight-purple: 280 65% 60%;
+
+    --pdf-page: 0 0% 100%;
+    --pdf-page-foreground: 240 10% 3.9%;
+    --pdf-page-border: 240 5.9% 80%;
   }
 
   .dark {
@@ -71,6 +75,10 @@
     --border: 240 3.7% 15.9%;
     --input: 240 3.7% 15.9%;
     --ring: 240 4.9% 83.9%;
+
+    --pdf-page: 0 0% 100%;
+    --pdf-page-foreground: 240 10% 3.9%;
+    --pdf-page-border: 240 5.9% 80%;
   }
 }
 

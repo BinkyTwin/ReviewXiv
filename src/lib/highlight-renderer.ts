@@ -1,12 +1,12 @@
 import type { TextItem, HighlightRect } from "@/types/pdf";
-import type { Citation } from "@/types/citation";
+import type { PdfCitation } from "@/types/citation";
 
 /**
  * Convert citation offsets to visual rectangles
  * Uses text items to map character positions to screen coordinates
  */
 export function offsetsToRects(
-  citation: Citation,
+  citation: PdfCitation,
   textItems: TextItem[],
 ): HighlightRect[] {
   const rects: HighlightRect[] = [];

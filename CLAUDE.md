@@ -8,7 +8,7 @@ Objectif : importer un PDF, le lire, surligner, discuter, traduire, avec des cit
 
 1. **Always use Context7** when I need code generation, setup or configuration steps, or library/API documentation.
 2. **Follow EPCP workflow** (Explore -> Plan -> Code -> Commit) for any feature or bug fix.
-3. **Use Supabase MCP** for database operations - never write raw SQL without explaining first.
+3. **Use Supabase CLI** for database operations (`supabase` command) - never use MCP.
 4. **Use GitHub CLI** (gh) for issues and PRs when available.
 5. **TodoList** : regarde toujours `.claude/productbacklog.md`, si la tâche y figure, marque-la comme faite quand terminée. Si elle n'y figure pas, ajoute-la.
 6. **CHANGELOG** : Après CHAQUE modification de code, mets à jour `CHANGELOG.md` avec le format approprié (FIX:, FEATURE:, REFACTOR:, etc.)
@@ -29,6 +29,45 @@ npm run dev          # Serveur dev (port 3000)
 npm run build        # Build production
 npm run lint         # ESLint
 ```
+
+## Supabase CLI
+
+### Installation & Setup
+```bash
+# Install as dev dependency
+npm install supabase --save-dev
+
+# Or run directly with npx (requires Node.js 20+)
+npx supabase --help
+
+# Initialize project (creates supabase/ folder)
+supabase init
+
+# Start local Supabase (requires Docker)
+supabase start
+
+# Stop local services
+supabase stop
+```
+
+### Commandes Principales
+```bash
+supabase migration list      # Voir l'état des migrations
+supabase migration new NAME  # Créer une migration
+supabase db push             # Appliquer au remote
+supabase db pull             # Tirer le schéma remote
+supabase db diff --linked    # Comparer local vs remote
+supabase gen types typescript --linked > src/types/database.ts
+```
+
+### URLs Locales (après `supabase start`)
+| Service | URL |
+|---------|-----|
+| API | http://localhost:54321 |
+| Studio | http://localhost:54323 |
+| DB | postgresql://postgres:postgres@localhost:54322/postgres |
+
+📚 **Référence complète**: `.claude/skills/supabase-cli/SKILL.md`
 
 ## Structure Projet
 

@@ -1,11 +1,11 @@
-Cree un nouveau composant React pour DeepRead.
+Cree un nouveau composant React pour reviewxiv.
 
 ## Composant a creer : $ARGUMENTS
 
 ## Instructions
 
 1. **Verifie que le composant n'existe pas deja**
-   - Cherche dans `deepread-app/src/components/` un fichier similaire
+   - Cherche dans `reviewxiv-app/src/components/` un fichier similaire
 
 2. **Cree le fichier** dans le bon dossier :
    - `components/pdf/` pour tout ce qui touche au viewer PDF

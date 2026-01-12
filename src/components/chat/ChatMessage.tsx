@@ -82,7 +82,9 @@ export function ChatMessage({
                     onClick={() => onCitationClick?.(citation)}
                     className="inline-flex items-center px-2.5 py-1 rounded-full text-[11px] font-medium bg-secondary text-secondary-foreground hover:bg-secondary/80 border border-border/50 transition-all apple-shadow active:scale-95"
                   >
-                    Source p. {citation.page}
+                    {citation.format === "html" || "sectionId" in citation
+                      ? `Source section ${citation.sectionId}`
+                      : `Source p. ${citation.page}`}
                   </button>
                   {onSaveCitation && (
                     <button

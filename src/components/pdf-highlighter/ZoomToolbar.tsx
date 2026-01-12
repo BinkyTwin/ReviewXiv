@@ -2,7 +2,15 @@
 
 import { ScanLine, ZoomIn, ZoomOut, Maximize2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { cn } from "@/lib/utils";
+import type { TranslationLanguage } from "@/types/translation";
 
 interface ZoomToolbarProps {
   /** Current zoom level (1 = fit width) */
@@ -23,6 +31,15 @@ interface ZoomToolbarProps {
   areaSelectionMode?: boolean;
   /** Callback to toggle area selection mode */
   onToggleAreaSelection?: () => void;
+  /** Active translation target language */
+  translationLanguage?: TranslationLanguage;
+  /** Available translation languages */
+  translationLanguageOptions?: ReadonlyArray<{
+    value: TranslationLanguage;
+    label: string;
+  }>;
+  /** Callback when translation language changes */
+  onTranslationLanguageChange?: (language: TranslationLanguage) => void;
   /** Additional CSS classes */
   className?: string;
 }
@@ -37,6 +54,9 @@ export function ZoomToolbar({
   canZoomOut = true,
   areaSelectionMode = false,
   onToggleAreaSelection,
+  translationLanguage,
+  translationLanguageOptions,
+  onTranslationLanguageChange,
   className,
 }: ZoomToolbarProps) {
   const isFitWidth = Math.abs(zoomLevel - 1) < 0.01;
@@ -116,6 +136,34 @@ export function ZoomToolbar({
           </Button>
         </>
       )}
+
+      {translationLanguage &&
+        translationLanguageOptions &&
+        onTranslationLanguageChange && (
+          <>
+            <div className="w-px h-6 bg-border mx-1" />
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-muted-foreground">Langue</span>
+              <Select
+                value={translationLanguage}
+                onValueChange={(value) =>
+                  onTranslationLanguageChange(value as TranslationLanguage)
+                }
+              >
+                <SelectTrigger className="h-8 w-[110px] text-xs">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {translationLanguageOptions.map((language) => (
+                    <SelectItem key={language.value} value={language.value}>
+                      {language.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </>
+        )}
     </div>
   );
 }

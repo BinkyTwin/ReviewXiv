@@ -15,13 +15,27 @@ import { ModeToggle } from "@/components/mode-toggle";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { offsetsToRects } from "@/lib/highlight-renderer";
-import type { PaperWithPages } from "@/types/paper";
-import type { Citation } from "@/types/citation";
+import { HtmlViewer } from "@/components/reader/HtmlViewer";
+import type { PaperFormat, PaperWithPages, PaperWithSections } from "@/types/paper";
+import type { Citation, HtmlCitation, PdfCitation } from "@/types/citation";
 import type { TextItem } from "@/types/pdf";
 import type {
   Highlight,
-  HighlightColor,
+  HighlightRect,
+  HtmlHighlight,
+  PdfHighlight,
 } from "@/types/highlight";
+import type {
+  InlineTranslation,
+  HtmlInlineTranslation,
+  PdfInlineTranslation,
+  TranslationLanguage,
+  TranslationSelection,
+} from "@/types/translation";
+import {
+  TRANSLATION_LANGUAGES,
+  isTranslationLanguage,
+} from "@/types/translation";
 
 const PDFHighlighterViewer = dynamic(
   () =>
@@ -44,28 +58,31 @@ const PDFHighlighterViewer = dynamic(
 );
 
 interface PaperReaderProps {
-  paper: PaperWithPages;
-  pdfUrl: string;
+  paper: PaperWithPages | PaperWithSections;
+  pdfUrl?: string;
 }
 
 export function PaperReader({ paper, pdfUrl }: PaperReaderProps) {
   const router = useRouter();
+  const isHtml = paper.format === "html";
 
   const [activeCitation, setActiveCitation] = useState<Citation | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
+  const [currentSectionId, setCurrentSectionId] = useState<string | null>(null);
   const [highlights, setHighlights] = useState<Highlight[]>([]);
   const [highlightContext, setHighlightContext] = useState<{
-    page: number;
+    format: PaperFormat;
     text: string;
+    pageNumber?: number;
+    sectionId?: string;
   } | null>(null);
   const [imageContext, setImageContext] = useState<{
     imageData: string;
     page: number;
   } | null>(null);
-  const [translationModal, setTranslationModal] = useState<{
-    isOpen: boolean;
-    text: string;
-  }>({ isOpen: false, text: "" });
+  const [translations, setTranslations] = useState<InlineTranslation[]>([]);
+  const [translationLanguage, setTranslationLanguage] =
+    useState<TranslationLanguage>("fr");
   const [activeTab, setActiveTab] = useState<"chat" | "notes">("chat");
   const [pdfWidthPercent, setPdfWidthPercent] = useState(70);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -80,25 +97,104 @@ export function PaperReader({ paper, pdfUrl }: PaperReaderProps) {
     }
   }, []);
 
+  useEffect(() => {
+    const saved = localStorage.getItem("reviewxiv-translation-language");
+    if (saved && isTranslationLanguage(saved)) {
+      setTranslationLanguage(saved);
+    }
+  }, []);
+
+  useEffect(() => {
+    localStorage.setItem(
+      "reviewxiv-translation-language",
+      translationLanguage,
+    );
+  }, [translationLanguage]);
+
   const scrollToHighlightRef = useRef<((highlightId: string) => void) | null>(
     null,
   );
 
+  const paperPages = isHtml ? [] : (paper as PaperWithPages).paper_pages;
+  const paperSections = isHtml
+    ? (paper as PaperWithSections).paper_sections
+    : [];
+
+  const orderedSections = useMemo(
+    () => [...paperSections].sort((a, b) => a.section_index - b.section_index),
+    [paperSections],
+  );
+
   const textItemsMap = useMemo(() => {
     const map = new Map<number, TextItem[]>();
-    for (const page of paper.paper_pages) {
+    for (const page of paperPages) {
       map.set(page.page_number, page.text_items as TextItem[]);
     }
     return map;
-  }, [paper.paper_pages]);
+  }, [paperPages]);
 
   const pageTextMap = useMemo(() => {
     const map = new Map<number, string>();
-    for (const page of paper.paper_pages) {
+    for (const page of paperPages) {
       map.set(page.page_number, page.text_content || "");
     }
     return map;
-  }, [paper.paper_pages]);
+  }, [paperPages]);
+
+  const sectionTextMap = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const section of orderedSections) {
+      const sectionKey =
+        section.section_id || `section-${section.section_index + 1}`;
+      map.set(sectionKey, section.text_content || "");
+    }
+    return map;
+  }, [orderedSections]);
+
+  const sectionTitleMap = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const section of orderedSections) {
+      const sectionKey =
+        section.section_id || `section-${section.section_index + 1}`;
+      map.set(sectionKey, section.title || sectionKey);
+    }
+    return map;
+  }, [orderedSections]);
+
+  const sectionTitleRecord = useMemo(
+    () => Object.fromEntries(sectionTitleMap),
+    [sectionTitleMap],
+  );
+
+  const sectionIndexMap = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const section of orderedSections) {
+      const sectionKey =
+        section.section_id || `section-${section.section_index + 1}`;
+      map.set(sectionKey, section.section_index);
+    }
+    return map;
+  }, [orderedSections]);
+
+  const chatPages = useMemo(
+    () =>
+      paperPages.map((page) => ({
+        pageNumber: page.page_number,
+        textContent: page.text_content,
+      })),
+    [paperPages],
+  );
+
+  const chatSections = useMemo(
+    () =>
+      orderedSections.map((section) => ({
+        sectionId:
+          section.section_id || `section-${section.section_index + 1}`,
+        textContent: section.text_content,
+        title: section.title || undefined,
+      })),
+    [orderedSections],
+  );
 
   useEffect(() => {
     const fetchHighlights = async () => {
@@ -116,6 +212,66 @@ export function PaperReader({ paper, pdfUrl }: PaperReaderProps) {
     fetchHighlights();
   }, [paper.id]);
 
+  useEffect(() => {
+    const fetchTranslations = async () => {
+      try {
+        const response = await fetch(`/api/translations?paperId=${paper.id}`);
+        if (response.ok) {
+          const data = await response.json();
+          setTranslations(data.translations || []);
+        }
+      } catch (error) {
+        console.error("Error fetching translations:", error);
+      }
+    };
+
+    fetchTranslations();
+  }, [paper.id]);
+
+  const pdfHighlights = useMemo(
+    () =>
+      highlights.filter(
+        (highlight): highlight is PdfHighlight => highlight.format !== "html",
+      ),
+    [highlights],
+  );
+
+  const htmlHighlights = useMemo(
+    () =>
+      highlights.filter(
+        (highlight): highlight is HtmlHighlight => highlight.format === "html",
+      ),
+    [highlights],
+  );
+
+  const pdfTranslations = useMemo(
+    () =>
+      translations.filter(
+        (translation): translation is PdfInlineTranslation =>
+          translation.format !== "html",
+      ),
+    [translations],
+  );
+
+  const htmlTranslations = useMemo(
+    () =>
+      translations.filter(
+        (translation): translation is HtmlInlineTranslation =>
+          translation.format === "html",
+      ),
+    [translations],
+  );
+
+  const activePdfCitation =
+    activeCitation && activeCitation.format !== "html"
+      ? (activeCitation as PdfCitation)
+      : null;
+
+  const activeHtmlCitation =
+    activeCitation && (activeCitation.format === "html" || "sectionId" in activeCitation)
+      ? (activeCitation as HtmlCitation)
+      : null;
+
   const handleCitationClick = useCallback((citation: Citation) => {
     setActiveCitation(citation);
     setTimeout(() => setActiveCitation(null), 3500);
@@ -123,34 +279,90 @@ export function PaperReader({ paper, pdfUrl }: PaperReaderProps) {
 
   const handleSaveCitation = useCallback(
     async (citation: Citation) => {
+      if (citation.format === "html" || "sectionId" in citation) {
+        const htmlCitation = citation as HtmlCitation;
+        const existingHighlight = highlights.find(
+          (highlight) =>
+            highlight.format === "html" &&
+            highlight.sectionId === htmlCitation.sectionId &&
+            highlight.startOffset === htmlCitation.start &&
+            highlight.endOffset === htmlCitation.end,
+        );
+
+        if (existingHighlight) {
+          return;
+        }
+
+        const sectionText =
+          sectionTextMap.get(htmlCitation.sectionId) || "";
+        const selectedText =
+          htmlCitation.start >= 0 && htmlCitation.end <= sectionText.length
+            ? sectionText.slice(htmlCitation.start, htmlCitation.end).trim()
+            : htmlCitation.quote || "";
+
+        const pageNumber = sectionIndexMap.get(htmlCitation.sectionId);
+
+        try {
+          const response = await fetch("/api/highlights", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              paperId: paper.id,
+              format: "html",
+              sectionId: htmlCitation.sectionId,
+              pageNumber:
+                pageNumber !== undefined ? pageNumber + 1 : undefined,
+              startOffset: htmlCitation.start,
+              endOffset: htmlCitation.end,
+              selectedText: selectedText || htmlCitation.quote || "",
+              rects: [],
+              color: "yellow",
+            }),
+          });
+
+          if (response.ok) {
+            const data = await response.json();
+            setHighlights((prev) => [...prev, data.highlight]);
+          } else {
+            console.error("Failed to save HTML citation highlight.");
+          }
+        } catch (error) {
+          console.error("Error saving HTML citation highlight:", error);
+        }
+
+        return;
+      }
+
+      const pdfCitation = citation as PdfCitation;
       const existingHighlight = highlights.find(
         (highlight) =>
-          highlight.pageNumber === citation.page &&
-          highlight.startOffset === citation.start &&
-          highlight.endOffset === citation.end,
+          highlight.format !== "html" &&
+          highlight.pageNumber === pdfCitation.page &&
+          highlight.startOffset === pdfCitation.start &&
+          highlight.endOffset === pdfCitation.end,
       );
 
       if (existingHighlight) {
         return;
       }
 
-      const pageTextItems = textItemsMap.get(citation.page);
+      const pageTextItems = textItemsMap.get(pdfCitation.page);
       if (!pageTextItems) {
         console.warn("Missing text items for citation highlight.");
         return;
       }
 
-      const rects = offsetsToRects(citation, pageTextItems);
+      const rects = offsetsToRects(pdfCitation, pageTextItems);
       if (rects.length === 0) {
         console.warn("No rects found for citation highlight.");
         return;
       }
 
-      const pageText = pageTextMap.get(citation.page) || "";
+      const pageText = pageTextMap.get(pdfCitation.page) || "";
       const selectedText =
-        citation.start >= 0 && citation.end <= pageText.length
-          ? pageText.slice(citation.start, citation.end).trim()
-          : citation.quote || "";
+        pdfCitation.start >= 0 && pdfCitation.end <= pageText.length
+          ? pageText.slice(pdfCitation.start, pdfCitation.end).trim()
+          : pdfCitation.quote || "";
 
       try {
         const response = await fetch("/api/highlights", {
@@ -158,10 +370,11 @@ export function PaperReader({ paper, pdfUrl }: PaperReaderProps) {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             paperId: paper.id,
-            pageNumber: citation.page,
-            startOffset: citation.start,
-            endOffset: citation.end,
-            selectedText: selectedText || citation.quote || "",
+            format: "pdf",
+            pageNumber: pdfCitation.page,
+            startOffset: pdfCitation.start,
+            endOffset: pdfCitation.end,
+            selectedText: selectedText || pdfCitation.quote || "",
             rects,
             color: "yellow",
           }),
@@ -177,21 +390,43 @@ export function PaperReader({ paper, pdfUrl }: PaperReaderProps) {
         console.error("Error saving citation highlight:", error);
       }
     },
-    [highlights, pageTextMap, paper.id, textItemsMap],
+    [
+      highlights,
+      pageTextMap,
+      paper.id,
+      sectionIndexMap,
+      sectionTextMap,
+      textItemsMap,
+    ],
   );
 
   const handleHighlightClick = useCallback(
     (highlight: Highlight) => {
       if (scrollToHighlightRef.current) {
         scrollToHighlightRef.current(highlight.id);
-        setCurrentPage(highlight.pageNumber);
+        if (highlight.format === "html" && highlight.sectionId) {
+          setCurrentSectionId(highlight.sectionId);
+        } else if (highlight.pageNumber) {
+          setCurrentPage(highlight.pageNumber);
+        }
+        return;
+      }
+
+      if (highlight.format === "html" && highlight.sectionId) {
+        const sectionElement = document.querySelector(
+          `[data-section-id="${CSS.escape(highlight.sectionId)}"]`,
+        );
+        if (sectionElement) {
+          sectionElement.scrollIntoView({ behavior: "smooth", block: "center" });
+          setCurrentSectionId(highlight.sectionId);
+        }
         return;
       }
 
       const pageElement = document.querySelector(
         `[data-page-number="${highlight.pageNumber}"]`,
       );
-      if (pageElement) {
+      if (pageElement && highlight.pageNumber) {
         pageElement.scrollIntoView({ behavior: "smooth", block: "center" });
         setCurrentPage(highlight.pageNumber);
       }
@@ -201,7 +436,9 @@ export function PaperReader({ paper, pdfUrl }: PaperReaderProps) {
 
   const handleHighlightAskAI = useCallback((highlight: Highlight) => {
     setHighlightContext({
-      page: highlight.pageNumber,
+      format: highlight.format,
+      pageNumber: highlight.pageNumber,
+      sectionId: highlight.sectionId ?? undefined,
       text: highlight.selectedText,
     });
     setActiveTab("chat");
@@ -211,39 +448,355 @@ export function PaperReader({ paper, pdfUrl }: PaperReaderProps) {
     setHighlights((prev) => prev.filter((h) => h.id !== highlightId));
   }, []);
 
-  const handleV3HighlightCreate = useCallback(async (highlight: Highlight) => {
-    try {
-      const response = await fetch("/api/highlights", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          paperId: highlight.paperId,
-          pageNumber: highlight.pageNumber,
-          startOffset: highlight.startOffset,
-          endOffset: highlight.endOffset,
-          selectedText: highlight.selectedText,
-          rects: highlight.rects,
-          color: highlight.color,
-        }),
-      });
+  const handlePdfHighlightCreate = useCallback(
+    async (highlight: PdfHighlight) => {
+      try {
+        const response = await fetch("/api/highlights", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            paperId: highlight.paperId,
+            format: "pdf",
+            pageNumber: highlight.pageNumber,
+            startOffset: highlight.startOffset,
+            endOffset: highlight.endOffset,
+            selectedText: highlight.selectedText,
+            rects: highlight.rects,
+            color: highlight.color,
+          }),
+        });
 
-      if (response.ok) {
-        const data = await response.json();
-        setHighlights((prev) => [...prev, data.highlight]);
+        if (response.ok) {
+          const data = await response.json();
+          setHighlights((prev) => [...prev, data.highlight]);
+        }
+      } catch (error) {
+        console.error("Error creating highlight:", error);
       }
-    } catch (error) {
-      console.error("Error creating highlight:", error);
-    }
-  }, []);
+    },
+    [],
+  );
+
+  const handleHtmlHighlightCreate = useCallback(
+    async (highlight: HtmlHighlight) => {
+      try {
+        const response = await fetch("/api/highlights", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            paperId: highlight.paperId,
+            format: "html",
+            sectionId: highlight.sectionId,
+            pageNumber: highlight.pageNumber,
+            startOffset: highlight.startOffset,
+            endOffset: highlight.endOffset,
+            selectedText: highlight.selectedText,
+            rects: highlight.rects,
+            color: highlight.color,
+          }),
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          setHighlights((prev) => [...prev, data.highlight]);
+        }
+      } catch (error) {
+        console.error("Error creating HTML highlight:", error);
+      }
+    },
+    [],
+  );
 
   const handleV3Ask = useCallback((text: string, page: number) => {
-    setHighlightContext({ page, text });
+    setHighlightContext({ format: "pdf", pageNumber: page, text });
     setActiveTab("chat");
   }, []);
 
-  const handleV3Translate = useCallback((text: string, page: number) => {
-    setTranslationModal({ isOpen: true, text });
+  const handleHtmlAsk = useCallback((text: string, sectionId: string) => {
+    setHighlightContext({ format: "html", sectionId, text });
+    setActiveTab("chat");
   }, []);
+
+  const getSelectionOffsets = useCallback(
+    (pageNumber: number, rects: HighlightRect[], selectedText: string) => {
+      const pageTextItems = textItemsMap.get(pageNumber);
+      if (pageTextItems && rects.length > 0) {
+        const overlaps = (a: HighlightRect, b: HighlightRect) => {
+          const overlapX =
+            Math.min(a.x + a.width, b.x + b.width) - Math.max(a.x, b.x);
+          const overlapY =
+            Math.min(a.y + a.height, b.y + b.height) - Math.max(a.y, b.y);
+          return overlapX > 0 && overlapY > 0;
+        };
+
+        const matchingItems = pageTextItems.filter((item) =>
+          rects.some((rect) =>
+            overlaps(
+              { x: item.x, y: item.y, width: item.width, height: item.height },
+              rect,
+            ),
+          ),
+        );
+
+        if (matchingItems.length > 0) {
+          const startOffset = Math.min(
+            ...matchingItems.map((item) => item.startOffset),
+          );
+          const endOffset = Math.max(
+            ...matchingItems.map((item) => item.endOffset),
+          );
+
+          return { startOffset, endOffset };
+        }
+      }
+
+      const pageText = pageTextMap.get(pageNumber) || "";
+      const normalizedText = selectedText.trim();
+      if (normalizedText && pageText) {
+        const index = pageText.indexOf(normalizedText);
+        if (index >= 0) {
+          return { startOffset: index, endOffset: index + normalizedText.length };
+        }
+      }
+
+      return {
+        startOffset: 0,
+        endOffset: Math.max(0, selectedText.length),
+      };
+    },
+    [pageTextMap, textItemsMap],
+  );
+
+  const handleTranslationToggle = useCallback(
+    async (translationId: string, nextActive: boolean) => {
+      setTranslations((prev) =>
+        prev.map((translation) =>
+          translation.id === translationId
+            ? { ...translation, isActive: nextActive }
+            : translation,
+        ),
+      );
+
+      try {
+        const response = await fetch(
+          `/api/translations?id=${translationId}`,
+          {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ isActive: nextActive }),
+          },
+        );
+
+        if (!response.ok) {
+          throw new Error("Failed to toggle translation");
+        }
+
+        const data = await response.json();
+        setTranslations((prev) =>
+          prev.map((translation) =>
+            translation.id === translationId
+              ? { ...translation, isActive: data.translation.isActive }
+              : translation,
+          ),
+        );
+      } catch (error) {
+        console.error("Error toggling translation:", error);
+        setTranslations((prev) =>
+          prev.map((translation) =>
+            translation.id === translationId
+              ? { ...translation, isActive: !nextActive }
+              : translation,
+          ),
+        );
+      }
+    },
+    [],
+  );
+
+  const handleV3Translate = useCallback(
+    async (selection: TranslationSelection) => {
+      if (selection.format !== "pdf" || selection.pageNumber === undefined) {
+        return;
+      }
+
+      const trimmedText = selection.text.trim();
+      if (!trimmedText || selection.rects.length === 0) return;
+
+      const { startOffset, endOffset } = getSelectionOffsets(
+        selection.pageNumber,
+        selection.rects,
+        trimmedText,
+      );
+
+      const existingTranslation = translations.find(
+        (translation) =>
+          translation.format === "pdf" &&
+          translation.pageNumber === selection.pageNumber &&
+          translation.startOffset === startOffset &&
+          translation.endOffset === endOffset &&
+          translation.targetLanguage === translationLanguage,
+      );
+
+      if (existingTranslation) {
+        if (!existingTranslation.isActive) {
+          await handleTranslationToggle(existingTranslation.id, true);
+        }
+        return;
+      }
+
+      try {
+        const translateResponse = await fetch("/api/translate", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            text: trimmedText,
+            targetLanguage: translationLanguage,
+          }),
+        });
+
+        if (!translateResponse.ok) {
+          throw new Error("Translation request failed");
+        }
+
+        const translateData = await translateResponse.json();
+        const translatedText = translateData.translation?.trim() || "";
+        const sourceLanguage =
+          translateData.sourceLanguage && translateData.sourceLanguage !== "auto"
+            ? translateData.sourceLanguage
+            : undefined;
+
+        if (!translatedText) {
+          throw new Error("Empty translation response");
+        }
+
+        const createResponse = await fetch("/api/translations", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            paperId: paper.id,
+            format: "pdf",
+            pageNumber: selection.pageNumber,
+            sourceText: trimmedText,
+            sourceLanguage,
+            targetLanguage: translationLanguage,
+            translatedText,
+            startOffset,
+            endOffset,
+            rects: selection.rects,
+            isActive: true,
+          }),
+        });
+
+        if (!createResponse.ok) {
+          throw new Error("Failed to save translation");
+        }
+
+        const data = await createResponse.json();
+        setTranslations((prev) => [...prev, data.translation]);
+      } catch (error) {
+        console.error("Error translating selection:", error);
+      }
+    },
+    [
+      getSelectionOffsets,
+      handleTranslationToggle,
+      paper.id,
+      translationLanguage,
+      translations,
+    ],
+  );
+
+  const handleHtmlTranslate = useCallback(
+    async (selection: TranslationSelection) => {
+      if (selection.format !== "html" || !selection.sectionId) return;
+      const trimmedText = selection.text.trim();
+      if (!trimmedText) return;
+
+      const sectionText = sectionTextMap.get(selection.sectionId) || "";
+      const foundIndex = sectionText.indexOf(trimmedText);
+      const startOffset = foundIndex >= 0 ? foundIndex : 0;
+      const endOffset =
+        foundIndex >= 0
+          ? foundIndex + trimmedText.length
+          : Math.max(trimmedText.length, 0);
+
+      const existingTranslation = translations.find(
+        (translation) =>
+          translation.format === "html" &&
+          translation.sectionId === selection.sectionId &&
+          translation.startOffset === startOffset &&
+          translation.endOffset === endOffset &&
+          translation.targetLanguage === translationLanguage,
+      );
+
+      if (existingTranslation) {
+        if (!existingTranslation.isActive) {
+          await handleTranslationToggle(existingTranslation.id, true);
+        }
+        return;
+      }
+
+      try {
+        const translateResponse = await fetch("/api/translate", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            text: trimmedText,
+            targetLanguage: translationLanguage,
+          }),
+        });
+
+        if (!translateResponse.ok) {
+          throw new Error("Translation request failed");
+        }
+
+        const translateData = await translateResponse.json();
+        const translatedText = translateData.translation?.trim() || "";
+        const sourceLanguage =
+          translateData.sourceLanguage && translateData.sourceLanguage !== "auto"
+            ? translateData.sourceLanguage
+            : undefined;
+
+        if (!translatedText) {
+          throw new Error("Empty translation response");
+        }
+
+        const createResponse = await fetch("/api/translations", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            paperId: paper.id,
+            format: "html",
+            sectionId: selection.sectionId,
+            sourceText: trimmedText,
+            sourceLanguage,
+            targetLanguage: translationLanguage,
+            translatedText,
+            startOffset,
+            endOffset,
+            rects: [],
+            isActive: true,
+          }),
+        });
+
+        if (!createResponse.ok) {
+          throw new Error("Failed to save translation");
+        }
+
+        const data = await createResponse.json();
+        setTranslations((prev) => [...prev, data.translation]);
+      } catch (error) {
+        console.error("Error translating HTML selection:", error);
+      }
+    },
+    [
+      handleTranslationToggle,
+      paper.id,
+      sectionTextMap,
+      translationLanguage,
+      translations,
+    ],
+  );
 
   const handleV3AskImage = useCallback((imageData: string, page: number) => {
     setImageContext({ imageData, page });
@@ -273,6 +826,25 @@ export function PaperReader({ paper, pdfUrl }: PaperReaderProps) {
     localStorage.setItem("reviewxiv-pdf-width", "70");
   }, []);
 
+  useEffect(() => {
+    if (isHtml && !currentSectionId && orderedSections.length > 0) {
+      const firstSection =
+        orderedSections[0].section_id ||
+        `section-${orderedSections[0].section_index + 1}`;
+      setCurrentSectionId(firstSection);
+    }
+  }, [currentSectionId, isHtml, orderedSections]);
+
+  const totalLabel = isHtml
+    ? `${orderedSections.length} sections`
+    : `${paper.page_count} pages`;
+
+  const currentLabel = isHtml
+    ? currentSectionId
+      ? sectionTitleMap.get(currentSectionId) || currentSectionId
+      : "Section"
+    : `Page ${currentPage}`;
+
   return (
     <div ref={containerRef} className="h-screen flex bg-background overflow-hidden selection:bg-primary/10 transition-colors duration-500">
       <div
@@ -290,20 +862,46 @@ export function PaperReader({ paper, pdfUrl }: PaperReaderProps) {
            </Button>
         </div>
 
-        <PDFHighlighterViewer
-          pdfUrl={pdfUrl}
-          paperId={paper.id}
-          highlights={highlights}
-          activeCitation={activeCitation}
-          textItemsMap={textItemsMap}
-          onHighlightCreate={handleV3HighlightCreate}
-          onHighlightClick={handleHighlightClick}
-          onAskSelection={handleV3Ask}
-          onTranslateSelection={handleV3Translate}
-          onAskImage={handleV3AskImage}
-          onPageChange={setCurrentPage}
-          scrollToHighlightRef={scrollToHighlightRef}
-        />
+        {isHtml ? (
+          <HtmlViewer
+            paperId={paper.id}
+            sections={orderedSections}
+            highlights={htmlHighlights}
+            translations={htmlTranslations}
+            activeCitation={activeHtmlCitation}
+            onHighlightCreate={handleHtmlHighlightCreate}
+            onHighlightClick={handleHighlightClick}
+            onAskSelection={handleHtmlAsk}
+            onTranslateSelection={handleHtmlTranslate}
+            onTranslationToggle={handleTranslationToggle}
+            onSectionChange={setCurrentSectionId}
+            scrollToHighlightRef={scrollToHighlightRef}
+          />
+        ) : pdfUrl ? (
+          <PDFHighlighterViewer
+            pdfUrl={pdfUrl}
+            paperId={paper.id}
+            highlights={pdfHighlights}
+            translations={pdfTranslations}
+            activeCitation={activePdfCitation}
+            textItemsMap={textItemsMap}
+            onHighlightCreate={handlePdfHighlightCreate}
+            onHighlightClick={handleHighlightClick}
+            onAskSelection={handleV3Ask}
+            onTranslateSelection={handleV3Translate}
+            onAskImage={handleV3AskImage}
+            onPageChange={setCurrentPage}
+            scrollToHighlightRef={scrollToHighlightRef}
+            onTranslationToggle={handleTranslationToggle}
+            translationLanguage={translationLanguage}
+            translationLanguageOptions={TRANSLATION_LANGUAGES}
+            onTranslationLanguageChange={setTranslationLanguage}
+          />
+        ) : (
+          <div className="flex h-full items-center justify-center text-muted-foreground">
+            PDF indisponible.
+          </div>
+        )}
       </div>
 
       <ResizeHandle
@@ -327,9 +925,9 @@ export function PaperReader({ paper, pdfUrl }: PaperReaderProps) {
                 {paper.title}
               </h1>
               <div className="flex items-center gap-2 text-[11px] text-muted-foreground font-medium uppercase tracking-wider">
-                <span>{paper.page_count} pages</span>
+                <span>{totalLabel}</span>
                 <span className="opacity-30">•</span>
-                <span>Page {currentPage}</span>
+                <span>{currentLabel}</span>
               </div>
             </div>
           </div>
@@ -368,10 +966,9 @@ export function PaperReader({ paper, pdfUrl }: PaperReaderProps) {
           >
             <ChatPanel
               paperId={paper.id}
-              pages={paper.paper_pages.map((p) => ({
-                pageNumber: p.page_number,
-                textContent: p.text_content,
-              }))}
+              format={paper.format}
+              pages={isHtml ? undefined : chatPages}
+              sections={isHtml ? chatSections : undefined}
               onCitationClick={handleCitationClick}
               onSaveCitation={handleSaveCitation}
               highlightContext={highlightContext}
@@ -386,7 +983,13 @@ export function PaperReader({ paper, pdfUrl }: PaperReaderProps) {
             className="flex-1 m-0 overflow-hidden flex flex-col"
           >
             <div className="flex-1 overflow-hidden">
-              <NotesPanel paperId={paper.id} currentPage={currentPage} />
+              <NotesPanel
+                paperId={paper.id}
+                currentPage={currentPage}
+                currentSectionId={currentSectionId || undefined}
+                format={paper.format}
+                sectionTitles={sectionTitleRecord}
+              />
             </div>
 
             <HighlightsPanel
@@ -396,6 +999,7 @@ export function PaperReader({ paper, pdfUrl }: PaperReaderProps) {
               onAskAI={handleHighlightAskAI}
               onDelete={handleHighlightDelete}
               onDeleteAll={handleDeleteAllHighlights}
+              sectionTitles={sectionTitleRecord}
             />
           </TabsContent>
         </Tabs>

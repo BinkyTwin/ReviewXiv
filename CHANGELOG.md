@@ -4,6 +4,109 @@ This file tracks main tasks completed by AI agents. Only significant changes are
 
 ---
 
+## 2026-01-12
+
+FEATURE: Add arXiv HTML import pipeline with section parsing and caching
+FEATURE: Add HTML reader with highlights, citations, translations, notes, and TOC
+REFACTOR: Extend highlights, notes, translations, and chunks to support HTML format
+FIX: Fix TypeScript union handling for HTML highlight create requests
+FIX: Fix Cheerio parser options typing for build
+FIX: Wrap `useSearchParams` under Suspense for Next.js prerender
+
+## 2026-01-11
+
+REFACTOR: Extract translation overlays to independent TranslationLayer component
+  - Create separate TranslationLayer.tsx outside react-pdf-highlighter system
+  - Remove translations from viewerHighlights array (no longer as library highlights)
+  - Render TranslationLayer as sibling to PdfHighlighter for guaranteed opacity
+  - Translations now have solid opaque backgrounds that properly mask original text
+  - Remove obsolete TranslationOverlay component and related types
+
+FEATURE: Add inline translation overlays in the PDFHighlighter viewer
+FEATURE: Save translated selections with target language control
+FIX: Use viewport highlight coordinates for translation overlays
+FIX: Use request origin and cookies for translate -> llm internal calls
+FIX: Avoid conditional hook usage in PDFHighlighterViewer highlight container
+FIX: Constrain translation overlay size and lock to white PDF surface
+
+## 2026-01-03
+
+FIX: Remove undefined cleanupExpiredLocks() call in /api/embeddings/generate
+  - Remove redundant lock cleanup (handled automatically by acquireLock)
+  - Fixes Vercel deployment build error: Cannot find name 'cleanupExpiredLocks'
+
+FIX: Configure Next.js body size limit to resolve 413 error on PDF upload
+  - Add experimental.serverActions.bodySizeLimit: 35mb in next.config.mjs
+  - Reduce MAX_PDF_SIZE from 50MB to 30MB for better compatibility
+  - Note: Vercel free tier has 4.5MB limit; requires paid plan for larger files
+
+## 2026-01-02
+
+REVERT: Remove queue-based embedding system with Vercel Cron
+   - Remove embedding_jobs table and migration
+   - Remove /api/jobs/create, /api/jobs/process, /api/jobs/stats endpoints
+   - Remove cron configuration from vercel.json
+   - Revert ingestion to simple status setting
+
+IMPLÉMENT: Lazy embeddings generation "à la demande"
+   - Add embedding_locks table for concurrency control
+   - Create lock-manager with acquire/release/isLocked functions
+   - Reinforce /api/embeddings/generate with lock validation and auto-release
+   - Add lazy trigger in /api/chat (async, non-blocking)
+   - Embeddings generated only when user opens document or asks a question
+   - First request triggers generation, subsequent requests use cached embeddings
+   - Lock system prevents concurrent generation for same paper
+   - Idempotent: re-running only processes chunks without embeddings
+
+IMPROVE: Simplify monitoring logger
+   - Remove logEmbeddingGeneration, logQueueAction functions
+   - Keep logRagQuery, logReranking for RAG monitoring
+
+FIX: Replace reranking model with google/gemma-3n-e4b-it:free
+  - Add sanitizeTextForDb() function to remove \u0000 and control characters
+  - Apply sanitization to text_content and chunk content
+  - Fixes PostgreSQL error "unsupported Unicode escape sequence"
+
+FIX: Refactor RAG search to use direct function calls instead of HTTP fetch
+  - Extract search logic into src/lib/rag/search.ts module
+  - Update /api/chat to call searchChunks() directly
+  - Update /api/search/chunks to use shared module
+  - Fixes Vercel Authentication blocking internal API calls on preview deployments
+
+REFACTOR: Rewrite Supabase skill from MCP to CLI-based workflow
+  - Replace MCP-based instructions with Supabase CLI commands
+  - Add comprehensive command reference (migrations, db, functions, storage)
+  - Add database inspection tools documentation
+  - Document workflow rules and best practices
+  - Include project schema reference
+
+FEATURE: Implement RAG-001 - Modern RAG system with embeddings and semantic search
+  - Add OpenRouter embeddings client (text-embedding-3-small, 1536 dims)
+  - Add embedding generation API (/api/embeddings/generate)
+  - Add embedding status API (/api/embeddings/status)
+  - Add semantic search API (/api/search/chunks)
+  - Implement hybrid search (BM25 + vector similarity)
+  - Implement MMR (Maximum Marginal Relevance) for diverse results
+  - Add LLM-based re-ranking for improved relevance
+  - Integrate RAG into chat API with fallback to legacy pages mode
+  - Auto-trigger embedding generation after PDF ingestion
+
+FEATURE: Add Supabase migrations for RAG infrastructure
+  - Enable pgvector extension
+  - Add embedding column (4096 dims) to chunks table
+  - Add tsvector column for full-text search (BM25)
+  - Add HNSW index for fast vector similarity search
+  - Add embedding status tracking to papers table
+  - Create search_chunks_hybrid, search_chunks_vector, search_chunks_mmr functions
+
+REFACTOR: Update chat API to use RAG by default
+  - Default to semantic search instead of sending all pages
+  - Add useRag option for legacy compatibility
+  - Add ragOptions for fine-tuning retrieval (topK, useHybrid, useMmr, useReranking)
+  - Reduce token usage by ~80% (8 chunks vs all pages)
+
+---
+
 ## 2026-01-01
 
 TECH-001: Consolidate PDF viewer - remove PDFViewer (classic) and SmartPDFViewer (v2), keep only PDFHighlighterViewer based on react-pdf-highlighter-extended

@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import type { CreateHighlightRequest } from "@/types/highlight";
+import type {
+  CreateHighlightRequest,
+  Highlight,
+  HighlightRect,
+} from "@/types/highlight";
 
 // GET /api/highlights?paperId=xxx
 export async function GET(request: NextRequest) {
@@ -33,14 +37,16 @@ export async function GET(request: NextRequest) {
     }
 
     // Transform snake_case to camelCase
-    const transformedHighlights = highlights.map((h) => ({
+    const transformedHighlights: Highlight[] = highlights.map((h) => ({
       id: h.id,
       paperId: h.paper_id,
+      format: h.format || "pdf",
       pageNumber: h.page_number,
+      sectionId: h.section_id || undefined,
       startOffset: h.start_offset,
       endOffset: h.end_offset,
       selectedText: h.selected_text,
-      rects: h.rects,
+      rects: (h.rects || []) as HighlightRect[],
       color: h.color,
       note: h.note,
       createdAt: h.created_at,
@@ -70,11 +76,14 @@ export async function POST(request: NextRequest) {
       selectedText,
       rects,
       color,
+      format,
     } = body;
+
+    const highlightFormat = format ?? "pdf";
+    const sectionId = body.format === "html" ? body.sectionId : undefined;
 
     if (
       !paperId ||
-      !pageNumber ||
       startOffset === undefined ||
       endOffset === undefined ||
       !selectedText
@@ -87,16 +96,52 @@ export async function POST(request: NextRequest) {
 
     const supabase = await createClient();
 
+    let resolvedPageNumber = pageNumber;
+
+    if (highlightFormat === "html") {
+      if (!sectionId) {
+        return NextResponse.json(
+          { error: "sectionId is required for HTML highlights" },
+          { status: 400 },
+        );
+      }
+
+      if (resolvedPageNumber === undefined) {
+        const { data: sectionRow, error: sectionError } = await supabase
+          .from("paper_sections")
+          .select("section_index")
+          .eq("paper_id", paperId)
+          .eq("section_id", sectionId)
+          .maybeSingle();
+
+        if (sectionError || !sectionRow) {
+          return NextResponse.json(
+            { error: "Invalid sectionId" },
+            { status: 400 },
+          );
+        }
+
+        resolvedPageNumber = sectionRow.section_index + 1;
+      }
+    } else if (resolvedPageNumber === undefined) {
+      return NextResponse.json(
+        { error: "pageNumber is required for PDF highlights" },
+        { status: 400 },
+      );
+    }
+
     const { data: highlight, error } = await supabase
       .from("highlights")
       .insert({
         paper_id: paperId,
-        page_number: pageNumber,
+        page_number: resolvedPageNumber,
         start_offset: startOffset,
         end_offset: endOffset,
         selected_text: selectedText,
         rects: rects || [],
         color: color || "yellow",
+        format: highlightFormat,
+        section_id: highlightFormat === "html" ? sectionId : null,
       })
       .select()
       .single();
@@ -113,7 +158,9 @@ export async function POST(request: NextRequest) {
     const transformedHighlight = {
       id: highlight.id,
       paperId: highlight.paper_id,
+      format: highlight.format || "pdf",
       pageNumber: highlight.page_number,
+      sectionId: highlight.section_id || undefined,
       startOffset: highlight.start_offset,
       endOffset: highlight.end_offset,
       selectedText: highlight.selected_text,

@@ -1,8 +1,8 @@
 import type { ScaledPosition, Content } from "react-pdf-highlighter-extended";
 import type {
-  Highlight,
+  PdfHighlight,
   HighlightColor,
-  CreateHighlightRequest,
+  CreatePdfHighlightRequest,
 } from "@/types/highlight";
 import type {
   ReviewXivHighlight,
@@ -18,7 +18,7 @@ import {
  * Converts a Supabase Highlight to react-pdf-highlighter-extended format
  */
 export function supabaseToRphHighlight(
-  highlight: Highlight,
+  highlight: PdfHighlight,
   dimensions: PageDimensions,
 ): ReviewXivHighlight {
   const position = rectsToScaledPosition(
@@ -45,7 +45,7 @@ export function supabaseToRphHighlight(
  * Converts multiple Supabase Highlights to react-pdf-highlighter-extended format
  */
 export function supabaseHighlightsToRph(
-  highlights: Highlight[],
+  highlights: PdfHighlight[],
   dimensionsMap: PageDimensionsMap,
 ): ReviewXivHighlight[] {
   return highlights
@@ -62,11 +62,12 @@ export function rphToCreateHighlightRequest(
   color: HighlightColor,
   paperId: string,
   dimensions: PageDimensions,
-): CreateHighlightRequest {
+): CreatePdfHighlightRequest {
   const rects = scaledPositionToRects(position, dimensions);
 
   return {
     paperId,
+    format: "pdf",
     pageNumber: position.boundingRect.pageNumber,
     startOffset: 0, // Not available from react-pdf-highlighter-extended
     endOffset: 0, // Not available from react-pdf-highlighter-extended
@@ -81,8 +82,8 @@ export function rphToCreateHighlightRequest(
  */
 export function findOriginalHighlight(
   id: string,
-  highlights: Highlight[],
-): Highlight | undefined {
+  highlights: PdfHighlight[],
+): PdfHighlight | undefined {
   return highlights.find((h) => h.id === id);
 }
 

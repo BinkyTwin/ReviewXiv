@@ -45,8 +45,10 @@ export const CitationLayer = memo(function CitationLayer({
     }
 
     // Start new flash
-    setCurrentCitation(citation);
-    setIsVisible(true);
+    const raf = window.requestAnimationFrame(() => {
+      setCurrentCitation(citation);
+      setIsVisible(true);
+    });
 
     // Hide after duration
     const timer = setTimeout(() => {
@@ -54,7 +56,10 @@ export const CitationLayer = memo(function CitationLayer({
       onFlashComplete?.();
     }, flashDuration);
 
-    return () => clearTimeout(timer);
+    return () => {
+      window.cancelAnimationFrame(raf);
+      clearTimeout(timer);
+    };
   }, [citation, flashDuration, onFlashComplete]);
 
   // Clear citation after fade out

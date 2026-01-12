@@ -26,10 +26,17 @@ interface CitationsResponse {
 
 interface ChatPanelProps {
   paperId: string;
-  pages: Array<{ pageNumber: number; textContent: string }>;
+  format: "pdf" | "html";
+  pages?: Array<{ pageNumber: number; textContent: string }>;
+  sections?: Array<{ sectionId: string; textContent: string; title?: string }>;
   onCitationClick?: (citation: Citation) => void;
   onSaveCitation?: (citation: Citation) => void;
-  highlightContext?: { page: number; text: string } | null;
+  highlightContext?: {
+    format?: "pdf" | "html";
+    pageNumber?: number;
+    sectionId?: string;
+    text: string;
+  } | null;
   onHighlightContextClear?: () => void;
   /** Image context for vision analysis (base64 PNG, page number) */
   imageContext?: { imageData: string; page: number } | null;
@@ -39,7 +46,9 @@ interface ChatPanelProps {
 
 export function ChatPanel({
   paperId,
+  format,
   pages,
+  sections,
   onCitationClick,
   onSaveCitation,
   highlightContext,
@@ -69,9 +78,15 @@ export function ChatPanel({
         highlightContext.text.length > 100
           ? highlightContext.text.slice(0, 100) + "..."
           : highlightContext.text;
-      setInput(
-        `À propos de ce passage (page ${highlightContext.page}) : "${excerpt}"\n\n`,
-      );
+      if (highlightContext.format === "html" && highlightContext.sectionId) {
+        setInput(
+          `À propos de ce passage (section ${highlightContext.sectionId}) : "${excerpt}"\n\n`,
+        );
+      } else if (highlightContext.pageNumber) {
+        setInput(
+          `À propos de ce passage (page ${highlightContext.pageNumber}) : "${excerpt}"\n\n`,
+        );
+      }
     }
   }, [highlightContext]);
 
@@ -111,7 +126,9 @@ export function ChatPanel({
           paperId,
           conversationId,
           message: userMessage.content,
+          format,
           pages,
+          sections,
           highlightContext: highlightSnapshot,
           imageData: currentImage || undefined,
         }),
@@ -181,7 +198,9 @@ export function ChatPanel({
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             answerText: fullText,
+            format,
             pages,
+            sections,
             highlightContext: highlightSnapshot,
           }),
         });
@@ -266,10 +285,10 @@ export function ChatPanel({
               <div className="h-16 w-16 rounded-3xl bg-muted/50 flex items-center justify-center mb-4 apple-shadow">
                 <Bot className="h-8 w-8 text-muted-foreground/50" />
               </div>
-              <h3 className="text-sm font-medium mb-1">Comment puis-je vous aider ?</h3>
-              <p className="text-xs text-muted-foreground max-w-[200px]">
-                Posez n'importe quelle question sur ce document scientifique.
-              </p>
+	              <h3 className="text-sm font-medium mb-1">Comment puis-je vous aider ?</h3>
+	              <p className="text-xs text-muted-foreground max-w-[200px]">
+	                Posez n&apos;importe quelle question sur ce document scientifique.
+	              </p>
             </div>
           ) : (
             messages.map((message) => (
@@ -310,7 +329,7 @@ export function ChatPanel({
                 />
                 <button
                   onClick={() => setPendingImage(null)}
-                  className="absolute -top-2 -right-2 w-6 h-6 bg-destructive text-white rounded-full flex items-center justify-center text-xs shadow-lg hover:scale-110 transition-transform"
+                  className="absolute -top-2 -right-2 w-6 h-6 bg-destructive text-destructive-foreground rounded-full flex items-center justify-center text-xs shadow-lg hover:scale-110 transition-transform"
                 >
                   <X className="h-3 w-3" />
                 </button>

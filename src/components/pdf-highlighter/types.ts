@@ -4,11 +4,16 @@ import type {
   Content,
 } from "react-pdf-highlighter-extended";
 import type {
-  Highlight,
+  PdfHighlight,
   HighlightColor,
   HighlightRect,
 } from "@/types/highlight";
-import type { Citation } from "@/types/citation";
+import type {
+  PdfInlineTranslation,
+  TranslationLanguage,
+  TranslationSelection,
+} from "@/types/translation";
+import type { PdfCitation } from "@/types/citation";
 import type { TextItem } from "@/types/pdf";
 
 /**
@@ -55,15 +60,15 @@ export interface PDFHighlighterViewerProps {
   /** Paper ID for highlights */
   paperId: string;
   /** Highlights loaded from Supabase */
-  highlights?: Highlight[];
+  highlights?: PdfHighlight[];
   /** Active citation to flash */
-  activeCitation?: Citation | null;
+  activeCitation?: PdfCitation | null;
   /** Text items map for citation -> rect conversion */
   textItemsMap?: TextItemsMap;
   /** Callback when highlight is created */
-  onHighlightCreate?: (highlight: Highlight) => void;
+  onHighlightCreate?: (highlight: PdfHighlight) => void;
   /** Callback when highlight is clicked */
-  onHighlightClick?: (highlight: Highlight) => void;
+  onHighlightClick?: (highlight: PdfHighlight) => void;
   /** Callback when highlight is deleted */
   onHighlightDelete?: (highlightId: string) => void;
   /** Callback when page changes */
@@ -71,7 +76,7 @@ export interface PDFHighlighterViewerProps {
   /** Callback for "Ask" action on text selection */
   onAskSelection?: (text: string, page: number) => void;
   /** Callback for "Translate" action on selection */
-  onTranslateSelection?: (text: string, page: number) => void;
+  onTranslateSelection?: (selection: TranslationSelection) => void;
   /** Callback for "Ask" action on image/area selection (base64 PNG) */
   onAskImage?: (imageData: string, page: number) => void;
   /** Callback when an area highlight (image) is saved */
@@ -84,6 +89,19 @@ export interface PDFHighlighterViewerProps {
   scrollToHighlightRef?: React.MutableRefObject<
     ((highlightId: string) => void) | null
   >;
+  /** Inline translations for overlay rendering */
+  translations?: PdfInlineTranslation[];
+  /** Callback to toggle translation visibility */
+  onTranslationToggle?: (translationId: string, nextActive: boolean) => void;
+  /** Active translation target language */
+  translationLanguage?: TranslationLanguage;
+  /** Available translation languages */
+  translationLanguageOptions?: ReadonlyArray<{
+    value: TranslationLanguage;
+    label: string;
+  }>;
+  /** Callback when translation language changes */
+  onTranslationLanguageChange?: (language: TranslationLanguage) => void;
   /** Additional CSS classes */
   className?: string;
 }
@@ -148,7 +166,7 @@ export interface HighlightPopupProps {
  */
 export interface CitationFlashProps {
   /** Citation to flash */
-  citation: Citation;
+  citation: PdfCitation;
   /** Rects to highlight (converted from citation) */
   rects: HighlightRect[];
   /** Page number */
