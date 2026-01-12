@@ -6,7 +6,7 @@ import { createRangeFromOffsets } from "@/lib/html/selection";
 
 interface HtmlCitationFlashProps {
   citation: HtmlCitation | null;
-  contentRef: React.RefObject<HTMLElement>;
+  contentRef: React.RefObject<HTMLElement | null>;
   duration?: number;
   onComplete?: () => void;
 }

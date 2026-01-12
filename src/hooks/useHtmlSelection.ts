@@ -13,7 +13,7 @@ export interface HtmlSelectionState {
 }
 
 interface UseHtmlSelectionOptions {
-  containerRef: React.RefObject<HTMLElement>;
+  containerRef: React.RefObject<HTMLElement | null>;
 }
 
 function findSectionElement(node: Node | null): HTMLElement | null {

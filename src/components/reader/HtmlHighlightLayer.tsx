@@ -7,7 +7,7 @@ import { cn } from "@/lib/utils";
 
 interface HtmlHighlightLayerProps {
   highlights: HtmlHighlight[];
-  contentRef: React.RefObject<HTMLElement>;
+  contentRef: React.RefObject<HTMLElement | null>;
   onHighlightClick?: (highlight: HtmlHighlight) => void;
 }
 

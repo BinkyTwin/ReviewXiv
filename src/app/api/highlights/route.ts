@@ -77,10 +77,10 @@ export async function POST(request: NextRequest) {
       rects,
       color,
       format,
-      sectionId,
     } = body;
 
     const highlightFormat = format ?? "pdf";
+    const sectionId = body.format === "html" ? body.sectionId : undefined;
 
     if (
       !paperId ||

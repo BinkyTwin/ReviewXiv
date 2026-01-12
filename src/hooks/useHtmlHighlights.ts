@@ -13,7 +13,7 @@ export interface HtmlHighlightBox {
 
 interface UseHtmlHighlightsOptions {
   highlights: HtmlHighlight[];
-  contentRef: React.RefObject<HTMLElement>;
+  contentRef: React.RefObject<HTMLElement | null>;
 }
 
 export function useHtmlHighlights({

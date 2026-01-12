@@ -7,7 +7,7 @@ import { cn } from "@/lib/utils";
 
 interface HtmlTranslationLayerProps {
   translations: HtmlInlineTranslation[];
-  contentRef: React.RefObject<HTMLElement>;
+  contentRef: React.RefObject<HTMLElement | null>;
   onToggle?: (translationId: string, nextActive: boolean) => void;
 }
 

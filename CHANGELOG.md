@@ -9,6 +9,9 @@ This file tracks main tasks completed by AI agents. Only significant changes are
 FEATURE: Add arXiv HTML import pipeline with section parsing and caching
 FEATURE: Add HTML reader with highlights, citations, translations, notes, and TOC
 REFACTOR: Extend highlights, notes, translations, and chunks to support HTML format
+FIX: Fix TypeScript union handling for HTML highlight create requests
+FIX: Fix Cheerio parser options typing for build
+FIX: Wrap `useSearchParams` under Suspense for Next.js prerender
 
 ## 2026-01-11
 

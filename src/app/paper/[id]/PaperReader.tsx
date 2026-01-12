@@ -438,7 +438,7 @@ export function PaperReader({ paper, pdfUrl }: PaperReaderProps) {
     setHighlightContext({
       format: highlight.format,
       pageNumber: highlight.pageNumber,
-      sectionId: highlight.sectionId,
+      sectionId: highlight.sectionId ?? undefined,
       text: highlight.selectedText,
     });
     setActiveTab("chat");

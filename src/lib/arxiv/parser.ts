@@ -48,7 +48,7 @@ export function parseArxivHtml(
   html: string,
   arxivId: string,
 ): ArxivParsedPaper {
-  const $ = cheerio.load(html, { decodeEntities: true });
+  const $ = cheerio.load(html);
 
   const title = firstNonEmpty([
     extractMeta($, "citation_title"),
